@@ -371,7 +371,7 @@ async def get_me(user: dict = Depends(get_current_user)):
 
 # ===================== OPPORTUNITY ROUTES =====================
 
-@api_router.post("/opportunities", response_model=OpportunityResponse)
+@api_router.post("/opportunities", response_model=OpportunityResponse, status_code=201)
 async def create_opportunity(data: OpportunityCreate, user: dict = Depends(require_admin)):
     opp_id = str(uuid.uuid4())
     
