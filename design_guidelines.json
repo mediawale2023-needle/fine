@@ -1,0 +1,136 @@
+{
+  "design_system": {
+    "identity": {
+      "name": "TradeNexus AI",
+      "persona": "The Diplomat",
+      "tone": "Authoritative, Exclusive, Secure, Boardroom-Ready",
+      "theme_strategy": "Light Mode with High-Contrast Navy/Charcoal anchors. No Dark Mode toggle (Enterprise tools often enforce a standard view for consistency)."
+    },
+    "typography": {
+      "font_family": {
+        "headings": "Playfair Display, serif",
+        "body": "Inter, sans-serif",
+        "mono": "JetBrains Mono, monospace"
+      },
+      "scale": {
+        "h1": "text-4xl font-bold tracking-tight text-slate-900",
+        "h2": "text-3xl font-semibold tracking-tight text-slate-900",
+        "h3": "text-2xl font-medium text-slate-800",
+        "body_lg": "text-lg leading-relaxed text-slate-700",
+        "body_base": "text-base leading-relaxed text-slate-600",
+        "caption": "text-sm font-medium text-slate-500 uppercase tracking-wider"
+      },
+      "rules": [
+        "Use Playfair Display ONLY for Page Titles and Major Section Headers to add 'Old Money' prestige.",
+        "Use Inter for all data tables, inputs, and dense information.",
+        "Headings must have tight tracking (-0.02em).",
+        "Labels must be Uppercase + Wide Spacing (tracking-widest) + Tiny (text-xs)."
+      ]
+    },
+    "colors": {
+      "palette": {
+        "primary": {
+          "navy": "#0A192F",
+          "charcoal": "#1E293B",
+          "slate": "#334155"
+        },
+        "accent": {
+          "gold_muted": "#C5A059",
+          "teal_deep": "#0F4C5C",
+          "teal_subtle": "#2A9D8F"
+        },
+        "background": {
+          "off_white": "#F8F9FA",
+          "paper": "#FFFFFF",
+          "subtle_gray": "#F1F5F9"
+        },
+        "status": {
+          "success": "#059669",
+          "warning": "#D97706",
+          "error": "#DC2626",
+          "info": "#2563EB"
+        }
+      },
+      "usage": {
+        "header_bg": "bg-[#0A192F]",
+        "header_text": "text-white",
+        "primary_button": "bg-[#0A192F] hover:bg-[#1E293B] text-white",
+        "secondary_button": "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50",
+        "accent_element": "text-[#C5A059] or border-[#C5A059]",
+        "link_text": "text-[#0F4C5C] hover:text-[#0A192F]"
+      }
+    },
+    "layout": {
+      "spacing": "Generous. Use p-8 or p-12 for main containers. Gap-6 or Gap-8 for grids.",
+      "container_style": "Sharp corners or minimal rounding (rounded-sm). 1px border (border-slate-200). Subtle shadow (shadow-sm).",
+      "grid_strategy": "Bento Grid for Dashboards. Asymmetric layouts to break monotony.",
+      "navigation": "Sidebar (Left) for App. Top Bar for Admin/Global Actions."
+    },
+    "components": {
+      "buttons": "Sharp (rounded-sm) or slightly rounded (rounded-md). High contrast. No pill shapes.",
+      "cards": "White background, 1px border-slate-200, shadow-sm. Padding p-6.",
+      "inputs": "Bg-white, border-slate-300, focus:ring-[#C5A059] focus:border-[#C5A059].",
+      "tables": "Clean rows, h-16 height. No zebra striping. Bottom border only. Header uppercase text-xs text-slate-500."
+    },
+    "visual_enhancers": {
+      "textures": "Subtle noise/grain on the Navy sidebar to make it look like 'premium paper' or 'fabric'.",
+      "watermarks": "Very subtle world map SVG pattern in the background of the 'Opportunity' cards.",
+      "shadows": "Layered shadows: shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_6px_rgba(0,0,0,0.02)]"
+    }
+  },
+  "pages": {
+    "auth": {
+      "name": "Login / Access",
+      "layout": "Split Screen. Left: High-impact Image (Container Ship) with Navy Overlay. Right: Clean Login Form.",
+      "image_url": "https://images.unsplash.com/photo-1688786063751-a91b041b7821?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "key_elements": ["Logo", "Email/Password Input", "SSO Option (hidden/secondary)", "Legal Footer"]
+    },
+    "admin_dashboard": {
+      "name": "Principal Command Center",
+      "layout": "Bento Grid. Top: Key Metrics (Deal Flow Value, Active Matches). Middle: World Map Visualization (Active Trade Routes). Bottom: Recent Opportunities List.",
+      "features": ["Global Search", "Filter by Sector/Region", "Status Indicators (Pill Badges)"]
+    },
+    "opportunity_detail": {
+      "name": "Trade Opportunity Dossier",
+      "layout": "Three-Column Layout (Left: Demand Summary, Center: AI Analysis/Scoring, Right: Matched Exporters).",
+      "visuals": ["AI Score Gauge (Circular Progress)", "Risk Analysis Radar Chart", "Document Preview Thumbnail"]
+    },
+    "exporter_dashboard": {
+      "name": "Exporter Portal",
+      "layout": "Card-based Feed of 'Anonymised Opportunities'.",
+      "style": "Clean, distraction-free. Focus on 'Match Score' and 'Sector'.",
+      "actions": ["Express Interest Button (Primary)", "Dismiss (Secondary)"]
+    },
+    "pipeline": {
+      "name": "Deal Pipeline",
+      "layout": "Kanban Board or Horizontal Stepper.",
+      "stages": ["Received", "Interest", "Shortlisted", "Introduction", "Negotiation", "Closed"],
+      "style": "Columns with subtle backgrounds (slate-50). Cards draggable (or visual only)."
+    }
+  },
+  "assets": {
+    "images": {
+      "login_hero": "https://images.unsplash.com/photo-1688786063751-a91b041b7821?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "sector_agri": "https://images.unsplash.com/photo-1688320243376-69b68a8f656f?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "sector_pharma": "https://images.unsplash.com/photo-1704895376514-3938531148f6?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "sector_marine": "https://images.unsplash.com/photo-1648583076906-60338fa01f07?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "meeting_context": "https://images.unsplash.com/photo-1634326080825-985cfc816db6?crop=entropy&cs=srgb&fm=jpg&q=85"
+    },
+    "icons": "Lucide React (Standard, Clean). Use thin strokes (stroke-width={1.5}) for elegance."
+  },
+  "instructions_to_main_agent": [
+    "1. INSTALLATION: Run 'npm install lucide-react recharts clsx tailwind-merge' immediately.",
+    "2. SETUP: Configure tailwind.config.js to add the custom colors (Navy #0A192F, Gold #C5A059).",
+    "3. FONTS: Add Playfair Display via Google Fonts import in index.css.",
+    "4. COMPONENTS: Build a 'Card' component that enforces the 1px border and shadow style. Do not use default Shadcn cards without overriding the border/shadow.",
+    "5. LAYOUT: For the Dashboard, use a CSS Grid (grid-cols-12). Do not just stack divs.",
+    "6. AI SCORING: Mock the AI scoring with a visual 'Gauge' or 'Progress Ring' component.",
+    "7. DATA-TESTID: Add data-testid to all buttons and inputs (e.g., 'login-submit', 'opp-card-1')."
+  ],
+  "universal_guidelines": [
+    "No gradients for backgrounds. Use solid colors or subtle noise textures.",
+    "Buttons must have a 'pressed' state (scale-95) for tactile feedback.",
+    "All text on Navy backgrounds must be White or Slate-200. Never Gray-500.",
+    "Use 'Gap' utilities generously. Minimum gap-4, preferred gap-8."
+  ]
+}
