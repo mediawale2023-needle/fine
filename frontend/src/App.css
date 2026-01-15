@@ -1,34 +1,88 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
-}
-
-.App-header {
-    background-color: #0f0f10;
+/* App-specific styles */
+.app-container {
     min-height: 100vh;
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
 }
 
-.App-link {
-    color: #61dafb;
+.main-content {
+    flex: 1;
+    overflow-x: hidden;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Login split screen */
+.login-hero {
+    background-size: cover;
+    background-position: center;
+    position: relative;
+}
+
+.login-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(10, 25, 47, 0.85) 0%, rgba(30, 41, 59, 0.75) 100%);
+}
+
+/* Pipeline stages */
+.pipeline-stage {
+    @apply bg-slate-50 rounded-sm min-h-[400px];
+}
+
+.pipeline-card {
+    @apply bg-white border border-slate-200 shadow-card p-4 rounded-sm;
+}
+
+/* Status badges */
+.status-active {
+    @apply bg-emerald-50 text-emerald-700 border-emerald-200;
+}
+
+.status-draft {
+    @apply bg-slate-50 text-slate-600 border-slate-200;
+}
+
+.status-matched {
+    @apply bg-blue-50 text-blue-700 border-blue-200;
+}
+
+.status-closed {
+    @apply bg-gray-100 text-gray-600 border-gray-200;
+}
+
+/* Score indicators */
+.score-high {
+    @apply text-emerald-600;
+}
+
+.score-medium {
+    @apply text-amber-600;
+}
+
+.score-low {
+    @apply text-red-600;
+}
+
+/* Sector badges */
+.sector-badge {
+    @apply px-2 py-0.5 text-xs font-medium rounded-sm;
+}
+
+.sector-agriculture {
+    @apply bg-green-50 text-green-700;
+}
+
+.sector-marine {
+    @apply bg-cyan-50 text-cyan-700;
+}
+
+.sector-pharma {
+    @apply bg-purple-50 text-purple-700;
+}
+
+.sector-chemicals {
+    @apply bg-orange-50 text-orange-700;
+}
+
+.sector-valueadded {
+    @apply bg-amber-50 text-amber-700;
 }

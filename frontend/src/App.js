@@ -1,53 +1,154 @@
-import { useEffect } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
+
+// Pages
+import LoginPage from "@/pages/LoginPage";
+import AdminDashboard from "@/pages/AdminDashboard";
+import OpportunityDetail from "@/pages/OpportunityDetail";
+import ExporterDashboard from "@/pages/ExporterDashboard";
+import PipelineView from "@/pages/PipelineView";
+import CreateOpportunity from "@/pages/CreateOpportunity";
+import ExporterProfile from "@/pages/ExporterProfile";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+export const API = `${BACKEND_URL}/api`;
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+// Auth Context
+const AuthContext = createContext(null);
+
+export const useAuth = () => useContext(AuthContext);
+
+const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem("token"));
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    helloWorldApi();
-  }, []);
+    const verifyToken = async () => {
+      if (token) {
+        try {
+          const res = await axios.get(`${API}/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setUser(res.data);
+        } catch (e) {
+          localStorage.removeItem("token");
+          setToken(null);
+          setUser(null);
+        }
+      }
+      setLoading(false);
+    };
+    verifyToken();
+  }, [token]);
+
+  const login = async (email, password) => {
+    const res = await axios.post(`${API}/auth/login`, { email, password });
+    localStorage.setItem("token", res.data.access_token);
+    setToken(res.data.access_token);
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
+  const register = async (email, password, companyName, role) => {
+    const res = await axios.post(`${API}/auth/register`, {
+      email,
+      password,
+      company_name: companyName,
+      role
+    });
+    localStorage.setItem("token", res.data.access_token);
+    setToken(res.data.access_token);
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
+  const logout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setUser(null);
+  };
+
+  const authAxios = axios.create({
+    baseURL: API,
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
 
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
+    <AuthContext.Provider value={{ user, token, login, register, logout, loading, authAxios }}>
+      {children}
+    </AuthContext.Provider>
   );
 };
 
+// Protected Route
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-offwhite">
+        <div className="text-slate-500">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    return <Navigate to={user.role === "admin" ? "/admin" : "/exporter"} replace />;
+  }
+
+  return children;
+};
+
+function AppRoutes() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-offwhite">
+        <div className="text-slate-500">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route path="/login" element={user ? <Navigate to={user.role === "admin" ? "/admin" : "/exporter"} /> : <LoginPage />} />
+      
+      {/* Admin Routes */}
+      <Route path="/admin" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/admin/opportunity/:id" element={<ProtectedRoute allowedRoles={["admin"]}><OpportunityDetail /></ProtectedRoute>} />
+      <Route path="/admin/create-opportunity" element={<ProtectedRoute allowedRoles={["admin"]}><CreateOpportunity /></ProtectedRoute>} />
+      <Route path="/admin/pipeline" element={<ProtectedRoute allowedRoles={["admin"]}><PipelineView /></ProtectedRoute>} />
+      
+      {/* Exporter Routes */}
+      <Route path="/exporter" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterDashboard /></ProtectedRoute>} />
+      <Route path="/exporter/profile" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterProfile /></ProtectedRoute>} />
+      <Route path="/exporter/opportunity/:id" element={<ProtectedRoute allowedRoles={["exporter"]}><OpportunityDetail /></ProtectedRoute>} />
+      
+      {/* Default redirect */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+}
+
 function App() {
   return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
+    <BrowserRouter>
+      <AuthProvider>
+        <Toaster position="top-right" richColors />
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 
