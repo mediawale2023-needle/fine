@@ -327,7 +327,7 @@ async def ai_rank_exporters(opportunity: dict, exporters: list) -> list:
 
 # ===================== AUTH ROUTES =====================
 
-@api_router.post("/auth/register", response_model=TokenResponse)
+@api_router.post("/auth/register", response_model=TokenResponse, status_code=201)
 async def register(data: UserCreate):
     existing = await db.users.find_one({"email": data.email})
     if existing:
@@ -482,7 +482,7 @@ async def match_exporters(opp_id: str, user: dict = Depends(require_admin)):
 
 # ===================== EXPORTER PROFILE ROUTES =====================
 
-@api_router.post("/exporter-profiles", response_model=ExporterProfileResponse)
+@api_router.post("/exporter-profiles", response_model=ExporterProfileResponse, status_code=201)
 async def create_exporter_profile(data: ExporterProfileCreate, user: dict = Depends(get_current_user)):
     if user["role"] != "exporter":
         raise HTTPException(status_code=403, detail="Only exporters can create profiles")
@@ -538,7 +538,7 @@ async def get_all_profiles(user: dict = Depends(require_admin)):
 
 # ===================== DEAL ROUTES =====================
 
-@api_router.post("/deals", response_model=DealResponse)
+@api_router.post("/deals", response_model=DealResponse, status_code=201)
 async def create_deal(data: DealCreate, user: dict = Depends(require_admin)):
     opp = await db.opportunities.find_one({"id": data.opportunity_id}, {"_id": 0})
     if not opp:
