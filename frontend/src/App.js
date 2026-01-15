@@ -73,10 +73,32 @@ const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  // Create axios instance with interceptor for auth
   const authAxios = axios.create({
-    baseURL: API,
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
+    baseURL: API
   });
+
+  // Add auth header to all requests
+  authAxios.interceptors.request.use((config) => {
+    const storedToken = localStorage.getItem("token");
+    if (storedToken) {
+      config.headers.Authorization = `Bearer ${storedToken}`;
+    }
+    return config;
+  });
+
+  // Handle 401 errors
+  authAxios.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response?.status === 401) {
+        localStorage.removeItem("token");
+        setToken(null);
+        setUser(null);
+      }
+      return Promise.reject(error);
+    }
+  );
 
   return (
     <AuthContext.Provider value={{ user, token, login, register, logout, loading, authAxios }}>
