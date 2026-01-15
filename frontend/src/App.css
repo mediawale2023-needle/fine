@@ -25,64 +25,86 @@
 
 /* Pipeline stages */
 .pipeline-stage {
-    @apply bg-slate-50 rounded-sm min-h-[400px];
+    background-color: #F8FAFC;
+    border-radius: 2px;
+    min-height: 400px;
 }
 
 .pipeline-card {
-    @apply bg-white border border-slate-200 shadow-card p-4 rounded-sm;
+    background-color: white;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    padding: 1rem;
+    border-radius: 2px;
 }
 
 /* Status badges */
 .status-active {
-    @apply bg-emerald-50 text-emerald-700 border-emerald-200;
+    background-color: #ECFDF5;
+    color: #047857;
+    border-color: #A7F3D0;
 }
 
 .status-draft {
-    @apply bg-slate-50 text-slate-600 border-slate-200;
+    background-color: #F8FAFC;
+    color: #475569;
+    border-color: #E2E8F0;
 }
 
 .status-matched {
-    @apply bg-blue-50 text-blue-700 border-blue-200;
+    background-color: #EFF6FF;
+    color: #1D4ED8;
+    border-color: #BFDBFE;
 }
 
 .status-closed {
-    @apply bg-gray-100 text-gray-600 border-gray-200;
+    background-color: #F3F4F6;
+    color: #4B5563;
+    border-color: #D1D5DB;
 }
 
 /* Score indicators */
 .score-high {
-    @apply text-emerald-600;
+    color: #059669;
 }
 
 .score-medium {
-    @apply text-amber-600;
+    color: #D97706;
 }
 
 .score-low {
-    @apply text-red-600;
+    color: #DC2626;
 }
 
 /* Sector badges */
 .sector-badge {
-    @apply px-2 py-0.5 text-xs font-medium rounded-sm;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 2px;
 }
 
 .sector-agriculture {
-    @apply bg-green-50 text-green-700;
+    background-color: #F0FDF4;
+    color: #15803D;
 }
 
 .sector-marine {
-    @apply bg-cyan-50 text-cyan-700;
+    background-color: #ECFEFF;
+    color: #0E7490;
 }
 
 .sector-pharma {
-    @apply bg-purple-50 text-purple-700;
+    background-color: #FAF5FF;
+    color: #7E22CE;
 }
 
 .sector-chemicals {
-    @apply bg-orange-50 text-orange-700;
+    background-color: #FFF7ED;
+    color: #C2410C;
 }
 
 .sector-valueadded {
-    @apply bg-amber-50 text-amber-700;
+    background-color: #FFFBEB;
+    color: #B45309;
 }
