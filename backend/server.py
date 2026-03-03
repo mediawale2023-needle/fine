@@ -139,6 +139,78 @@ class ExpressInterestRequest(BaseModel):
 class AIParseRequest(BaseModel):
     raw_text: str
 
+# ===================== TRADE FINANCE MODELS =====================
+
+FINANCING_STATUSES = ["requested", "under_review", "sent_to_nbfc", "nbfc_offer_received", "accepted_by_exporter", "rejected"]
+PAYMENT_METHODS = ["LC", "open_account", "advance"]
+SUBSCRIPTION_PLANS = ["Basic", "Premium", "Enterprise"]
+SUBSCRIPTION_PRICES = {"Basic": 9999, "Premium": 24999, "Enterprise": 49999}
+
+class FinanceRequestCreate(BaseModel):
+    deal_id: str
+    purchase_order_value: float
+    financing_amount_requested: float
+    production_time_days: int
+    shipment_date: str
+    buyer_country: str
+    payment_method: str
+    exporter_bank_details: str
+    past_export_turnover: float
+
+class FinanceRequestResponse(BaseModel):
+    id: str
+    exporter_id: str
+    exporter_company: str
+    deal_id: str
+    opportunity_product: str
+    purchase_order_value: float
+    financing_amount_requested: float
+    production_time_days: int
+    shipment_date: str
+    buyer_country: str
+    payment_method: str
+    financing_status: str
+    risk_score: Optional[int] = None
+    risk_category: Optional[str] = None
+    nbfc_partner: Optional[str] = None
+    nbfc_offer_amount: Optional[float] = None
+    nbfc_interest_rate: Optional[float] = None
+    admin_notes: Optional[str] = None
+    created_at: str
+
+class NBFCOfferUpdate(BaseModel):
+    nbfc_partner: str
+    offer_amount: float
+    interest_rate: float
+    admin_notes: Optional[str] = None
+
+class RiskScoreResponse(BaseModel):
+    deal_id: str
+    exporter_id: str
+    risk_score: int
+    risk_category: str
+    scoring_breakdown: dict
+    recommended_financing_ratio: float
+    created_at: str
+
+class SubscriptionUpdate(BaseModel):
+    plan: str
+
+class RevenueRecordResponse(BaseModel):
+    id: str
+    revenue_type: str
+    exporter_id: Optional[str]
+    deal_id: Optional[str]
+    amount: float
+    status: str
+    description: str
+    created_at: str
+
+class ExporterFinanceProfile(BaseModel):
+    years_in_business: int = 5
+    export_turnover: float = 1000000
+    past_shipments: int = 50
+
 # ===================== AUTH HELPERS =====================
 
 def hash_password(password: str) -> str:
