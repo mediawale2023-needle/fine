@@ -11,8 +11,8 @@ Build a private, invite-only, enterprise-grade AI Trade Matchmaking Engine for a
 - **Authentication**: JWT-based custom auth
 
 ## User Personas
-1. **Admin (Principal Aggregator)**: Full access to upload demands, run AI matchmaking, approve matches, manage deals
-2. **Exporter (Paid User)**: View anonymized opportunities, express interest, track own deals
+1. **Admin (Principal Aggregator)**: Full access to upload demands, run AI matchmaking, approve matches, manage deals, review financing requests, track revenue
+2. **Exporter (Paid User)**: View anonymized opportunities, express interest, track own deals, request financing, manage subscription
 
 ## Core Requirements (Static)
 - 5 Sectors: Agriculture, Marine/Frozen Foods, Pharma, Special Chemicals, Value-Added Agri Products
@@ -21,61 +21,59 @@ Build a private, invite-only, enterprise-grade AI Trade Matchmaking Engine for a
 - Premium enterprise UI (navy/charcoal base, gold accent, Inter font)
 
 ## What's Been Implemented ✅
-**Date: January 15, 2026**
 
-### Backend (100% Complete)
+### Phase 1: Core MVP (January 15, 2026)
 - [x] JWT Authentication (admin/exporter roles)
-- [x] Trade Opportunity CRUD
-- [x] AI Document Parsing (GPT-5.2)
-- [x] AI Opportunity Scoring
-- [x] AI Exporter Matchmaking (Top 5)
+- [x] Trade Opportunity CRUD with AI parsing
 - [x] Exporter Profile Management
-- [x] Deal Pipeline Management
-- [x] Express Interest Flow
-- [x] Stats Dashboard API
-- [x] Seed Data Endpoint
+- [x] Deal Pipeline Management (6 stages)
+- [x] AI Matchmaking Engine
 
-### Frontend (85% Complete)
-- [x] Login Page (premium split-screen design)
-- [x] Admin Dashboard (stats, filters, opportunity cards)
-- [x] Opportunity Detail (3-column: Demand | AI Analysis | Matched Exporters)
-- [x] Create Opportunity (AI Parse + Manual Entry)
-- [x] Pipeline View (Kanban with 6 stages)
-- [x] Exporter Dashboard (anonymized opportunities)
-- [x] Exporter Profile Management
-- [x] Express Interest Flow
+### Phase 2: Trade Finance & Revenue (March 3, 2026)
 
-### AI Features
-- [x] Document parsing to structured opportunity
-- [x] Opportunity scoring (feasibility + risk)
-- [x] Exporter ranking by match criteria
+#### Trade Finance Engine
+- [x] Financing request workflow (requested → under_review → sent_to_nbfc → nbfc_offer_received → accepted/rejected)
+- [x] Exporter financing request form (PO value, financing amount, production time, payment method)
+- [x] Admin finance requests panel with status management
+- [x] NBFC offer recording by admin
+- [x] Exporter offer acceptance flow
 
-## Prioritized Backlog
+#### Risk Scoring Engine
+- [x] Trade Risk Score (0-100) calculation
+- [x] 4-factor scoring: Exporter strength (30%), Buyer country risk (20%), Payment method risk (25%), Deal size vs turnover (25%)
+- [x] Risk categories: Low, Medium, High, Very High
+- [x] Recommended financing ratio based on risk
 
-### P0 (Critical) - DONE
-- All core functionality implemented
+#### Revenue Model
+- [x] SaaS Subscriptions (Basic ₹9,999, Premium ₹24,999, Enterprise ₹49,999/year)
+- [x] Deal Commission (1.5% of closed deal value)
+- [x] Financing Commission (3% of approved loan amount)
+- [x] Revenue dashboard with summary and records
 
-### P1 (High Priority) - Future
-- [ ] Email draft generation for introductions
-- [ ] Bulk document upload
-- [ ] PDF export for opportunities
+## Database Collections
+- users, opportunities, exporter_profiles, deals, interests
+- finance_requests, risk_scores, revenue_records
 
-### P2 (Medium Priority) - Future
-- [ ] Token refresh mechanism
-- [ ] Advanced analytics dashboard
-- [ ] Multi-language support
-
-### P3 (Nice to Have) - Future
-- [ ] Mobile responsive optimization
-- [ ] Notification system
-- [ ] Audit logs
+## API Endpoints Added
+- POST /api/finance-requests - Create financing request
+- GET /api/finance-requests - List financing requests
+- PUT /api/finance-requests/{id}/status - Update status
+- PUT /api/finance-requests/{id}/nbfc-offer - Record NBFC offer
+- POST /api/finance-requests/{id}/accept - Accept offer
+- GET /api/risk-scores/{deal_id} - Get risk score
+- POST /api/risk-scores/calculate - Calculate risk score
+- GET /api/subscription/me - Get subscription status
+- POST /api/subscription/upgrade - Upgrade plan
+- GET /api/revenue - Get revenue records
+- GET /api/revenue/summary - Get revenue summary
+- POST /api/deals/{id}/close - Close deal with commission
 
 ## Demo Credentials
 - **Admin**: admin@tradenexus.com / admin123
 - **Exporter**: agrimax@export.in / exporter123
 
 ## Next Tasks
-1. Add email generation for introduction drafts
-2. Implement bulk document upload for batch opportunity creation
-3. Add PDF export functionality for opportunity dossiers
-4. Build analytics dashboard for conversion metrics
+1. Email notification system for financing status changes
+2. PDF export for financing requests to send to NBFCs
+3. Advanced analytics with charts and trends
+4. Bulk NBFC integration via API
