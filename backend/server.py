@@ -1404,12 +1404,16 @@ async def seed_data():
     
     for exp in exporters_data:
         exp_id = str(uuid.uuid4())
+        expiry_date = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
         await db.users.insert_one({
             "id": exp_id,
             "email": exp["email"],
             "password_hash": hash_password("exporter123"),
             "company_name": exp["company"],
             "role": "exporter",
+            "subscription_plan": "Premium",
+            "subscription_status": "active",
+            "subscription_expiry": expiry_date,
             "created_at": datetime.now(timezone.utc).isoformat()
         })
         
@@ -1423,6 +1427,8 @@ async def seed_data():
             "certifications": exp["certs"],
             "country_experience": exp["countries"],
             "reliability_score": 0.85,
+            "years_in_business": 8,
+            "past_shipments": 75,
             "created_at": datetime.now(timezone.utc).isoformat()
         })
     
