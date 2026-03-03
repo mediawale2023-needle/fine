@@ -915,6 +915,433 @@ async def get_my_interests(user: dict = Depends(get_current_user)):
     interests = await db.interests.find({"exporter_user_id": user["id"]}, {"_id": 0}).to_list(100)
     return interests
 
+# ===================== TRADE FINANCE ROUTES =====================
+
+@api_router.post("/finance-requests", response_model=FinanceRequestResponse, status_code=201)
+async def create_finance_request(data: FinanceRequestCreate, user: dict = Depends(get_current_user)):
+    """Exporter requests financing for a deal"""
+    if user["role"] != "exporter":
+        raise HTTPException(status_code=403, detail="Only exporters can request financing")
+    
+    # Check subscription
+    if not await check_subscription_valid(user["id"]):
+        raise HTTPException(status_code=403, detail="Active subscription required to request financing")
+    
+    # Verify deal exists and belongs to exporter
+    deal = await db.deals.find_one({"id": data.deal_id, "exporter_user_id": user["id"]}, {"_id": 0})
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found or access denied")
+    
+    # Check if financing already requested
+    existing = await db.finance_requests.find_one({"deal_id": data.deal_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Financing already requested for this deal")
+    
+    # Get exporter profile for risk scoring
+    profile = await db.exporter_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    opp = await db.opportunities.find_one({"id": deal["opportunity_id"]}, {"_id": 0})
+    
+    # Calculate risk score
+    exporter_data = {
+        "years_in_business": profile.get("years_in_business", 5) if profile else 5,
+        "export_turnover": data.past_export_turnover,
+        "certifications": profile.get("certifications", []) if profile else [],
+        "past_shipments": profile.get("past_shipments", 50) if profile else 50,
+        "reliability_score": profile.get("reliability_score", 0.8) if profile else 0.8
+    }
+    
+    deal_data = {
+        "deal_value": data.purchase_order_value,
+        "buyer_country": data.buyer_country,
+        "payment_method": data.payment_method
+    }
+    
+    risk_result = calculate_trade_risk_score(exporter_data, deal_data)
+    
+    # Store risk score
+    risk_id = str(uuid.uuid4())
+    risk_doc = {
+        "id": risk_id,
+        "deal_id": data.deal_id,
+        "exporter_id": profile["id"] if profile else user["id"],
+        "risk_score": risk_result["risk_score"],
+        "risk_category": risk_result["risk_category"],
+        "scoring_breakdown": risk_result["scoring_breakdown"],
+        "recommended_financing_ratio": risk_result["recommended_financing_ratio"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.risk_scores.insert_one(risk_doc)
+    
+    # Create finance request
+    request_id = str(uuid.uuid4())
+    finance_doc = {
+        "id": request_id,
+        "exporter_id": profile["id"] if profile else user["id"],
+        "exporter_user_id": user["id"],
+        "deal_id": data.deal_id,
+        "purchase_order_value": data.purchase_order_value,
+        "financing_amount_requested": data.financing_amount_requested,
+        "production_time_days": data.production_time_days,
+        "shipment_date": data.shipment_date,
+        "buyer_country": data.buyer_country,
+        "payment_method": data.payment_method,
+        "exporter_bank_details": data.exporter_bank_details,
+        "past_export_turnover": data.past_export_turnover,
+        "financing_status": "requested",
+        "risk_score_id": risk_id,
+        "risk_score": risk_result["risk_score"],
+        "risk_category": risk_result["risk_category"],
+        "nbfc_partner": None,
+        "nbfc_offer_amount": None,
+        "nbfc_interest_rate": None,
+        "admin_notes": None,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.finance_requests.insert_one(finance_doc)
+    
+    return FinanceRequestResponse(
+        id=request_id,
+        exporter_id=finance_doc["exporter_id"],
+        exporter_company=user["company_name"],
+        deal_id=data.deal_id,
+        opportunity_product=opp.get("product_name", "Unknown") if opp else "Unknown",
+        purchase_order_value=data.purchase_order_value,
+        financing_amount_requested=data.financing_amount_requested,
+        production_time_days=data.production_time_days,
+        shipment_date=data.shipment_date,
+        buyer_country=data.buyer_country,
+        payment_method=data.payment_method,
+        financing_status="requested",
+        risk_score=risk_result["risk_score"],
+        risk_category=risk_result["risk_category"],
+        created_at=finance_doc["created_at"]
+    )
+
+@api_router.get("/finance-requests", response_model=List[FinanceRequestResponse])
+async def get_finance_requests(status: Optional[str] = None, user: dict = Depends(get_current_user)):
+    """Get financing requests (admin sees all, exporter sees own)"""
+    query = {}
+    if status:
+        query["financing_status"] = status
+    
+    if user["role"] == "exporter":
+        query["exporter_user_id"] = user["id"]
+    
+    requests = await db.finance_requests.find(query, {"_id": 0}).to_list(100)
+    
+    result = []
+    for req in requests:
+        exporter_user = await db.users.find_one({"id": req["exporter_user_id"]}, {"_id": 0})
+        deal = await db.deals.find_one({"id": req["deal_id"]}, {"_id": 0})
+        opp = await db.opportunities.find_one({"id": deal["opportunity_id"]}, {"_id": 0}) if deal else None
+        
+        result.append(FinanceRequestResponse(
+            id=req["id"],
+            exporter_id=req["exporter_id"],
+            exporter_company=exporter_user.get("company_name", "Unknown") if exporter_user else "Unknown",
+            deal_id=req["deal_id"],
+            opportunity_product=opp.get("product_name", "Unknown") if opp else "Unknown",
+            purchase_order_value=req["purchase_order_value"],
+            financing_amount_requested=req["financing_amount_requested"],
+            production_time_days=req["production_time_days"],
+            shipment_date=req["shipment_date"],
+            buyer_country=req["buyer_country"],
+            payment_method=req["payment_method"],
+            financing_status=req["financing_status"],
+            risk_score=req.get("risk_score"),
+            risk_category=req.get("risk_category"),
+            nbfc_partner=req.get("nbfc_partner"),
+            nbfc_offer_amount=req.get("nbfc_offer_amount"),
+            nbfc_interest_rate=req.get("nbfc_interest_rate"),
+            admin_notes=req.get("admin_notes"),
+            created_at=req["created_at"]
+        ))
+    
+    return result
+
+@api_router.get("/finance-requests/{request_id}", response_model=FinanceRequestResponse)
+async def get_finance_request(request_id: str, user: dict = Depends(get_current_user)):
+    """Get single financing request"""
+    req = await db.finance_requests.find_one({"id": request_id}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Finance request not found")
+    
+    if user["role"] == "exporter" and req["exporter_user_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    exporter_user = await db.users.find_one({"id": req["exporter_user_id"]}, {"_id": 0})
+    deal = await db.deals.find_one({"id": req["deal_id"]}, {"_id": 0})
+    opp = await db.opportunities.find_one({"id": deal["opportunity_id"]}, {"_id": 0}) if deal else None
+    
+    return FinanceRequestResponse(
+        id=req["id"],
+        exporter_id=req["exporter_id"],
+        exporter_company=exporter_user.get("company_name", "Unknown") if exporter_user else "Unknown",
+        deal_id=req["deal_id"],
+        opportunity_product=opp.get("product_name", "Unknown") if opp else "Unknown",
+        purchase_order_value=req["purchase_order_value"],
+        financing_amount_requested=req["financing_amount_requested"],
+        production_time_days=req["production_time_days"],
+        shipment_date=req["shipment_date"],
+        buyer_country=req["buyer_country"],
+        payment_method=req["payment_method"],
+        financing_status=req["financing_status"],
+        risk_score=req.get("risk_score"),
+        risk_category=req.get("risk_category"),
+        nbfc_partner=req.get("nbfc_partner"),
+        nbfc_offer_amount=req.get("nbfc_offer_amount"),
+        nbfc_interest_rate=req.get("nbfc_interest_rate"),
+        admin_notes=req.get("admin_notes"),
+        created_at=req["created_at"]
+    )
+
+@api_router.put("/finance-requests/{request_id}/status")
+async def update_finance_status(request_id: str, status: str, user: dict = Depends(require_admin)):
+    """Admin updates financing request status"""
+    if status not in FINANCING_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {FINANCING_STATUSES}")
+    
+    result = await db.finance_requests.update_one(
+        {"id": request_id},
+        {"$set": {"financing_status": status}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Finance request not found")
+    
+    return {"message": "Status updated"}
+
+@api_router.put("/finance-requests/{request_id}/nbfc-offer")
+async def record_nbfc_offer(request_id: str, data: NBFCOfferUpdate, user: dict = Depends(require_admin)):
+    """Admin records NBFC offer for a financing request"""
+    result = await db.finance_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "financing_status": "nbfc_offer_received",
+            "nbfc_partner": data.nbfc_partner,
+            "nbfc_offer_amount": data.offer_amount,
+            "nbfc_interest_rate": data.interest_rate,
+            "admin_notes": data.admin_notes
+        }}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Finance request not found")
+    
+    return {"message": "NBFC offer recorded"}
+
+@api_router.post("/finance-requests/{request_id}/accept")
+async def accept_nbfc_offer(request_id: str, user: dict = Depends(get_current_user)):
+    """Exporter accepts NBFC offer"""
+    if user["role"] != "exporter":
+        raise HTTPException(status_code=403, detail="Only exporters can accept offers")
+    
+    req = await db.finance_requests.find_one({"id": request_id, "exporter_user_id": user["id"]}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Finance request not found")
+    
+    if req["financing_status"] != "nbfc_offer_received":
+        raise HTTPException(status_code=400, detail="No NBFC offer to accept")
+    
+    await db.finance_requests.update_one(
+        {"id": request_id},
+        {"$set": {"financing_status": "accepted_by_exporter"}}
+    )
+    
+    # Record financing commission (2-4% of loan amount)
+    commission_rate = 0.03  # 3%
+    commission_amount = req["nbfc_offer_amount"] * commission_rate
+    
+    revenue_id = str(uuid.uuid4())
+    await db.revenue_records.insert_one({
+        "id": revenue_id,
+        "revenue_type": "financing",
+        "exporter_id": req["exporter_id"],
+        "deal_id": req["deal_id"],
+        "finance_request_id": request_id,
+        "amount": commission_amount,
+        "loan_amount": req["nbfc_offer_amount"],
+        "nbfc_partner": req["nbfc_partner"],
+        "status": "pending",
+        "description": f"Financing commission ({commission_rate*100}% of ₹{req['nbfc_offer_amount']})",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"message": "Offer accepted", "financing_commission": commission_amount}
+
+# ===================== RISK SCORING ROUTES =====================
+
+@api_router.get("/risk-scores/{deal_id}", response_model=RiskScoreResponse)
+async def get_risk_score(deal_id: str, user: dict = Depends(get_current_user)):
+    """Get risk score for a deal"""
+    risk = await db.risk_scores.find_one({"deal_id": deal_id}, {"_id": 0})
+    if not risk:
+        raise HTTPException(status_code=404, detail="Risk score not found")
+    
+    # Verify access
+    if user["role"] == "exporter":
+        deal = await db.deals.find_one({"id": deal_id, "exporter_user_id": user["id"]})
+        if not deal:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    return RiskScoreResponse(**risk)
+
+@api_router.post("/risk-scores/calculate")
+async def calculate_risk_score_endpoint(
+    deal_id: str,
+    finance_profile: ExporterFinanceProfile,
+    user: dict = Depends(get_current_user)
+):
+    """Calculate risk score for a deal"""
+    deal = await db.deals.find_one({"id": deal_id}, {"_id": 0})
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    
+    opp = await db.opportunities.find_one({"id": deal["opportunity_id"]}, {"_id": 0})
+    profile = await db.exporter_profiles.find_one({"user_id": deal["exporter_user_id"]}, {"_id": 0})
+    
+    # Parse quantity to get deal value estimate
+    qty_str = opp.get("quantity", "1000 MT") if opp else "1000 MT"
+    try:
+        qty_num = float(''.join(filter(lambda x: x.isdigit() or x == '.', qty_str.split()[0])))
+    except:
+        qty_num = 1000
+    
+    deal_value = qty_num * 50000  # Rough estimate per MT
+    
+    exporter_data = {
+        "years_in_business": finance_profile.years_in_business,
+        "export_turnover": finance_profile.export_turnover,
+        "certifications": profile.get("certifications", []) if profile else [],
+        "past_shipments": finance_profile.past_shipments,
+        "reliability_score": profile.get("reliability_score", 0.8) if profile else 0.8
+    }
+    
+    deal_data = {
+        "deal_value": deal_value,
+        "buyer_country": opp.get("source_country", "Nigeria") if opp else "Nigeria",
+        "payment_method": "open_account"
+    }
+    
+    result = calculate_trade_risk_score(exporter_data, deal_data)
+    return result
+
+# ===================== SUBSCRIPTION ROUTES =====================
+
+@api_router.get("/subscription/me")
+async def get_my_subscription(user: dict = Depends(get_current_user)):
+    """Get current subscription status"""
+    user_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    
+    return {
+        "plan": user_doc.get("subscription_plan", "Basic"),
+        "status": user_doc.get("subscription_status", "active"),
+        "expiry": user_doc.get("subscription_expiry"),
+        "is_valid": await check_subscription_valid(user["id"])
+    }
+
+@api_router.post("/subscription/upgrade")
+async def upgrade_subscription(data: SubscriptionUpdate, user: dict = Depends(get_current_user)):
+    """Upgrade subscription plan"""
+    if data.plan not in SUBSCRIPTION_PLANS:
+        raise HTTPException(status_code=400, detail=f"Invalid plan. Must be one of: {SUBSCRIPTION_PLANS}")
+    
+    expiry_date = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+    
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "subscription_plan": data.plan,
+            "subscription_status": "active",
+            "subscription_expiry": expiry_date
+        }}
+    )
+    
+    # Record subscription revenue
+    revenue_id = str(uuid.uuid4())
+    await db.revenue_records.insert_one({
+        "id": revenue_id,
+        "revenue_type": "subscription",
+        "exporter_id": user["id"],
+        "deal_id": None,
+        "amount": SUBSCRIPTION_PRICES.get(data.plan, 9999),
+        "status": "completed",
+        "description": f"{data.plan} subscription - 1 year",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"message": f"Upgraded to {data.plan} plan", "expiry": expiry_date}
+
+# ===================== REVENUE ROUTES =====================
+
+@api_router.get("/revenue", response_model=List[RevenueRecordResponse])
+async def get_revenue_records(revenue_type: Optional[str] = None, user: dict = Depends(require_admin)):
+    """Get all revenue records (admin only)"""
+    query = {}
+    if revenue_type:
+        query["revenue_type"] = revenue_type
+    
+    records = await db.revenue_records.find(query, {"_id": 0}).to_list(1000)
+    return [RevenueRecordResponse(**r) for r in records]
+
+@api_router.get("/revenue/summary")
+async def get_revenue_summary(user: dict = Depends(require_admin)):
+    """Get revenue summary by type"""
+    subscription_total = 0
+    deal_total = 0
+    financing_total = 0
+    
+    records = await db.revenue_records.find({}, {"_id": 0}).to_list(1000)
+    for r in records:
+        if r["revenue_type"] == "subscription":
+            subscription_total += r["amount"]
+        elif r["revenue_type"] == "deal":
+            deal_total += r["amount"]
+        elif r["revenue_type"] == "financing":
+            financing_total += r["amount"]
+    
+    return {
+        "subscription_revenue": subscription_total,
+        "deal_commission_revenue": deal_total,
+        "financing_commission_revenue": financing_total,
+        "total_revenue": subscription_total + deal_total + financing_total,
+        "record_count": len(records)
+    }
+
+@api_router.post("/deals/{deal_id}/close")
+async def close_deal(deal_id: str, deal_value: float, user: dict = Depends(require_admin)):
+    """Close a deal and record commission"""
+    deal = await db.deals.find_one({"id": deal_id}, {"_id": 0})
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    
+    # Update deal stage
+    await db.deals.update_one(
+        {"id": deal_id},
+        {"$set": {
+            "stage": "Closed",
+            "deal_value": deal_value,
+            "closed_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Record deal commission (1.5% of deal value)
+    commission_rate = 0.015
+    commission_amount = deal_value * commission_rate
+    
+    revenue_id = str(uuid.uuid4())
+    await db.revenue_records.insert_one({
+        "id": revenue_id,
+        "revenue_type": "deal",
+        "exporter_id": deal["exporter_id"],
+        "deal_id": deal_id,
+        "amount": commission_amount,
+        "deal_value": deal_value,
+        "status": "pending",
+        "description": f"Deal commission ({commission_rate*100}% of ₹{deal_value})",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"message": "Deal closed", "commission": commission_amount}
+
 # ===================== STATS ROUTES =====================
 
 @api_router.get("/stats")
