@@ -154,10 +154,14 @@ function AppRoutes() {
       <Route path="/admin/opportunity/:id" element={<ProtectedRoute allowedRoles={["admin"]}><OpportunityDetail /></ProtectedRoute>} />
       <Route path="/admin/create-opportunity" element={<ProtectedRoute allowedRoles={["admin"]}><CreateOpportunity /></ProtectedRoute>} />
       <Route path="/admin/pipeline" element={<ProtectedRoute allowedRoles={["admin"]}><PipelineView /></ProtectedRoute>} />
+      <Route path="/admin/finance-requests" element={<ProtectedRoute allowedRoles={["admin"]}><AdminFinanceRequests /></ProtectedRoute>} />
+      <Route path="/admin/revenue" element={<ProtectedRoute allowedRoles={["admin"]}><AdminRevenue /></ProtectedRoute>} />
       
       {/* Exporter Routes */}
       <Route path="/exporter" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterDashboard /></ProtectedRoute>} />
       <Route path="/exporter/profile" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterProfile /></ProtectedRoute>} />
+      <Route path="/exporter/financing" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterFinancing /></ProtectedRoute>} />
+      <Route path="/exporter/subscription" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterSubscription /></ProtectedRoute>} />
       <Route path="/exporter/opportunity/:id" element={<ProtectedRoute allowedRoles={["exporter"]}><OpportunityDetail /></ProtectedRoute>} />
       
       {/* Default redirect */}
