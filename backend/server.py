@@ -397,6 +397,169 @@ async def ai_rank_exporters(opportunity: dict, exporters: list) -> list:
         logger.error(f"AI ranking error: {e}")
         return exporters[:5]
 
+# ===================== RISK SCORING ENGINE =====================
+
+COUNTRY_RISK_SCORES = {
+    # Low risk (Europe)
+    "Germany": 10, "France": 12, "UK": 15, "Netherlands": 10, "Spain": 18, "Italy": 20,
+    # Medium risk (Middle East)
+    "UAE": 25, "Saudi Arabia": 28, "Qatar": 22, "Oman": 30,
+    # Higher risk (Africa)
+    "Nigeria": 45, "Kenya": 40, "South Africa": 35, "Morocco": 32, "Egypt": 38
+}
+
+PAYMENT_METHOD_RISK = {
+    "LC": 10,  # Letter of Credit - Low risk
+    "advance": 5,  # Advance payment - Very low risk
+    "open_account": 40  # Open account - Higher risk
+}
+
+def calculate_trade_risk_score(
+    exporter_profile: dict,
+    deal_data: dict,
+    finance_data: Optional[dict] = None
+) -> dict:
+    """
+    Calculate Trade Risk Score (0-100)
+    
+    Inputs:
+    - Exporter profile (years_in_business, export_turnover, certifications, past_shipments)
+    - Deal data (deal_value, buyer_country, payment_method, delivery_terms)
+    
+    Scoring weights:
+    - Exporter strength: 30%
+    - Buyer country risk: 20%
+    - Payment method risk: 25%
+    - Deal size vs turnover: 25%
+    """
+    
+    # Extract values with defaults
+    years_in_business = exporter_profile.get("years_in_business", 5)
+    export_turnover = exporter_profile.get("export_turnover", 1000000)
+    certifications = exporter_profile.get("certifications", [])
+    past_shipments = exporter_profile.get("past_shipments", 50)
+    reliability_score = exporter_profile.get("reliability_score", 0.8)
+    
+    deal_value = deal_data.get("deal_value", 100000)
+    buyer_country = deal_data.get("buyer_country", "Nigeria")
+    payment_method = deal_data.get("payment_method", "open_account")
+    
+    scoring_breakdown = {}
+    
+    # 1. Exporter Strength Score (30%) - Higher is better, invert for risk
+    exporter_score = 0
+    if years_in_business >= 10:
+        exporter_score += 30
+    elif years_in_business >= 5:
+        exporter_score += 20
+    elif years_in_business >= 2:
+        exporter_score += 10
+    
+    if len(certifications) >= 4:
+        exporter_score += 30
+    elif len(certifications) >= 2:
+        exporter_score += 20
+    else:
+        exporter_score += 10
+    
+    if past_shipments >= 100:
+        exporter_score += 25
+    elif past_shipments >= 50:
+        exporter_score += 15
+    else:
+        exporter_score += 5
+    
+    exporter_score += int(reliability_score * 15)
+    
+    # Invert: high exporter score = low risk contribution
+    exporter_risk = max(0, 100 - exporter_score)
+    scoring_breakdown["exporter_strength"] = {"score": exporter_score, "risk_contribution": int(exporter_risk * 0.30)}
+    
+    # 2. Buyer Country Risk (20%)
+    country_risk = COUNTRY_RISK_SCORES.get(buyer_country, 35)
+    scoring_breakdown["buyer_country_risk"] = {"country": buyer_country, "risk_contribution": int(country_risk * 0.20)}
+    
+    # 3. Payment Method Risk (25%)
+    payment_risk = PAYMENT_METHOD_RISK.get(payment_method, 30)
+    scoring_breakdown["payment_method_risk"] = {"method": payment_method, "risk_contribution": int(payment_risk * 0.25)}
+    
+    # 4. Deal Size vs Turnover Risk (25%)
+    if export_turnover > 0:
+        deal_ratio = deal_value / export_turnover
+        if deal_ratio <= 0.1:  # Deal is <10% of turnover - low risk
+            size_risk = 10
+        elif deal_ratio <= 0.25:  # 10-25% - medium risk
+            size_risk = 25
+        elif deal_ratio <= 0.5:  # 25-50% - higher risk
+            size_risk = 45
+        else:  # >50% - high risk
+            size_risk = 70
+    else:
+        size_risk = 50
+    
+    scoring_breakdown["deal_size_risk"] = {"deal_value": deal_value, "turnover": export_turnover, "risk_contribution": int(size_risk * 0.25)}
+    
+    # Calculate total risk score
+    total_risk = (
+        int(exporter_risk * 0.30) +
+        int(country_risk * 0.20) +
+        int(payment_risk * 0.25) +
+        int(size_risk * 0.25)
+    )
+    
+    # Clamp to 0-100
+    total_risk = max(0, min(100, total_risk))
+    
+    # Determine risk category
+    if total_risk <= 25:
+        risk_category = "Low"
+    elif total_risk <= 50:
+        risk_category = "Medium"
+    elif total_risk <= 75:
+        risk_category = "High"
+    else:
+        risk_category = "Very High"
+    
+    # Calculate recommended financing ratio based on risk
+    if total_risk <= 25:
+        recommended_financing = 0.80  # 80% of order value
+    elif total_risk <= 50:
+        recommended_financing = 0.65  # 65%
+    elif total_risk <= 75:
+        recommended_financing = 0.50  # 50%
+    else:
+        recommended_financing = 0.35  # 35%
+    
+    return {
+        "risk_score": total_risk,
+        "risk_category": risk_category,
+        "scoring_breakdown": scoring_breakdown,
+        "recommended_financing_ratio": recommended_financing
+    }
+
+async def check_subscription_valid(user_id: str) -> bool:
+    """Check if exporter has valid subscription"""
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        return False
+    
+    # Admin always has access
+    if user.get("role") == "admin":
+        return True
+    
+    subscription_status = user.get("subscription_status", "active")
+    subscription_expiry = user.get("subscription_expiry")
+    
+    if subscription_status != "active":
+        return False
+    
+    if subscription_expiry:
+        expiry_date = datetime.fromisoformat(subscription_expiry.replace('Z', '+00:00'))
+        if expiry_date < datetime.now(timezone.utc):
+            return False
+    
+    return True
+
 # ===================== AUTH ROUTES =====================
 
 @api_router.post("/auth/register", response_model=TokenResponse, status_code=201)
