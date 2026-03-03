@@ -13,6 +13,10 @@ import ExporterDashboard from "@/pages/ExporterDashboard";
 import PipelineView from "@/pages/PipelineView";
 import CreateOpportunity from "@/pages/CreateOpportunity";
 import ExporterProfile from "@/pages/ExporterProfile";
+import ExporterFinancing from "@/pages/ExporterFinancing";
+import ExporterSubscription from "@/pages/ExporterSubscription";
+import AdminFinanceRequests from "@/pages/AdminFinanceRequests";
+import AdminRevenue from "@/pages/AdminRevenue";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
