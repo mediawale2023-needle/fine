@@ -7,7 +7,11 @@ import {
   GitBranch, 
   User, 
   LogOut,
-  Building2
+  Building2,
+  Wallet,
+  ShieldCheck,
+  CreditCard,
+  DollarSign
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -21,10 +25,14 @@ export default function Sidebar() {
     { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
     { path: "/admin/create-opportunity", icon: PlusCircle, label: "New Opportunity" },
     { path: "/admin/pipeline", icon: GitBranch, label: "Pipeline" },
+    { path: "/admin/finance-requests", icon: Wallet, label: "Finance Requests" },
+    { path: "/admin/revenue", icon: DollarSign, label: "Revenue" },
   ];
 
   const exporterLinks = [
     { path: "/exporter", icon: FileText, label: "Opportunities" },
+    { path: "/exporter/financing", icon: Wallet, label: "Trade Financing" },
+    { path: "/exporter/subscription", icon: CreditCard, label: "Subscription" },
     { path: "/exporter/profile", icon: User, label: "My Profile" },
   ];
 
