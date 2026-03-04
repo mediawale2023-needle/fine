@@ -178,8 +178,8 @@ export default function AdminRevenue() {
                           <span className="font-bold text-slate-900">₹{record.amount?.toLocaleString()}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <Badge className={record.status === "completed" ? "bg-emerald-500" : "bg-amber-500"}>
-                            {record.status}
+                          <Badge className={(record.status || "completed") === "completed" ? "bg-emerald-500" : "bg-amber-500"}>
+                            {record.status || "completed"}
                           </Badge>
                         </td>
                         <td className="px-6 py-4 text-slate-500 text-sm">

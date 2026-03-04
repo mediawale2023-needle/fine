@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, FileText, CheckCircle, Clock, RefreshCw } from "lucide-react";
+import { Search, FileText, CheckCircle, Clock, RefreshCw, MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const SECTORS = ["Agriculture", "Marine / Frozen Foods", "Pharma", "Special Chemicals", "Value-Added Agri Products"];
@@ -203,6 +203,7 @@ export default function ExporterDashboard() {
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
                       <th className="text-left px-6 py-4 text-xs uppercase tracking-wider text-slate-500 font-medium">Product</th>
+                      <th className="text-left px-6 py-4 text-xs uppercase tracking-wider text-slate-500 font-medium">Actions</th>
                       <th className="text-left px-6 py-4 text-xs uppercase tracking-wider text-slate-500 font-medium">Stage</th>
                       <th className="text-left px-6 py-4 text-xs uppercase tracking-wider text-slate-500 font-medium">Updated</th>
                     </tr>
@@ -218,6 +219,16 @@ export default function ExporterDashboard() {
                         </td>
                         <td className="px-6 py-4 text-slate-500 text-sm">
                           {new Date(deal.updated_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => navigate(`/deals/${deal.id}/room`)}
+                            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-[#0A192F] transition-colors"
+                            data-testid={`deal-room-btn-${deal.id}`}
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            Deal Room
+                          </button>
                         </td>
                       </tr>
                     ))}

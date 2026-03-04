@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { 
-  ArrowLeft, MapPin, Package, Calendar, Shield, FileText, 
-  Users, Zap, CheckCircle, Building2, TrendingUp, AlertTriangle
+import {
+  ArrowLeft, MapPin, Package, Calendar, Shield, FileText,
+  Users, Zap, CheckCircle, Building2, TrendingUp, AlertTriangle, MessageSquare
 } from "lucide-react";
 
 export default function OpportunityDetail() {
@@ -93,11 +93,14 @@ export default function OpportunityDetail() {
 
   const handleCreateDeal = async (exporterId) => {
     try {
-      await authAxios.post("/deals", {
+      const res = await authAxios.post("/deals", {
         opportunity_id: id,
         exporter_id: exporterId
       });
-      toast.success("Deal created successfully!");
+      toast.success("Deal created! Opening Deal Room...");
+      if (res.data?.id) {
+        setTimeout(() => navigate(`/deals/${res.data.id}/room`), 800);
+      }
       navigate("/admin/pipeline");
     } catch (e) {
       toast.error("Failed to create deal");

@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Wallet, RefreshCw, Building2, AlertTriangle, Send, CheckCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Wallet, RefreshCw, Building2, AlertTriangle, Send, CheckCircle, BarChart2, Zap } from "lucide-react";
 
 const FINANCING_STATUSES = [
   { value: "requested", label: "Requested" },
@@ -22,6 +23,7 @@ const FINANCING_STATUSES = [
 
 export default function AdminFinanceRequests() {
   const { authAxios } = useAuth();
+  const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -34,6 +36,7 @@ export default function AdminFinanceRequests() {
     admin_notes: ""
   });
   const [submitting, setSubmitting] = useState(false);
+  const [submittingToNBFC, setSubmittingToNBFC] = useState(null); // request id being submitted
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -51,6 +54,19 @@ export default function AdminFinanceRequests() {
   useEffect(() => {
     fetchRequests();
   }, [statusFilter]);
+
+  const handleSubmitToNBFCs = async (requestId) => {
+    setSubmittingToNBFC(requestId);
+    try {
+      const res = await authAxios.post(`/finance-requests/${requestId}/submit-to-nbfcs`);
+      toast.success(res.data.message || "Submitted to NBFCs");
+      fetchRequests();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to submit to NBFCs");
+    } finally {
+      setSubmittingToNBFC(null);
+    }
+  };
 
   const handleStatusChange = async (requestId, newStatus) => {
     try {
@@ -240,78 +256,110 @@ export default function AdminFinanceRequests() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {req.financing_status === "sent_to_nbfc" && !req.nbfc_partner && (
-                          <Dialog open={showOfferModal && selectedRequest?.id === req.id} onOpenChange={(open) => {
-                            setShowOfferModal(open);
-                            if (open) setSelectedRequest(req);
-                          }}>
-                            <DialogTrigger asChild>
-                              <Button size="sm" className="bg-gold hover:bg-amber-600 text-white">
-                                <Send className="w-3 h-3 mr-1" />
-                                Record Offer
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Record NBFC Offer</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4 mt-4">
-                                <div>
-                                  <Label className="text-xs uppercase tracking-wider text-slate-500">NBFC Partner *</Label>
-                                  <Input
-                                    value={offerData.nbfc_partner}
-                                    onChange={(e) => setOfferData({ ...offerData, nbfc_partner: e.target.value })}
-                                    className="mt-1.5"
-                                    placeholder="e.g., HDFC Bank, ICICI"
-                                  />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <Label className="text-xs uppercase tracking-wider text-slate-500">Offer Amount (₹) *</Label>
-                                    <Input
-                                      type="number"
-                                      value={offerData.offer_amount}
-                                      onChange={(e) => setOfferData({ ...offerData, offer_amount: e.target.value })}
-                                      className="mt-1.5"
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label className="text-xs uppercase tracking-wider text-slate-500">Interest Rate (% p.a.) *</Label>
-                                    <Input
-                                      type="number"
-                                      step="0.1"
-                                      value={offerData.interest_rate}
-                                      onChange={(e) => setOfferData({ ...offerData, interest_rate: e.target.value })}
-                                      className="mt-1.5"
-                                    />
-                                  </div>
-                                </div>
-                                <div>
-                                  <Label className="text-xs uppercase tracking-wider text-slate-500">Notes</Label>
-                                  <Textarea
-                                    value={offerData.admin_notes}
-                                    onChange={(e) => setOfferData({ ...offerData, admin_notes: e.target.value })}
-                                    className="mt-1.5"
-                                    rows={3}
-                                  />
-                                </div>
-                                <Button
-                                  onClick={handleRecordOffer}
-                                  disabled={submitting}
-                                  className="w-full bg-navy hover:bg-charcoal text-white"
-                                >
-                                  {submitting ? "Saving..." : "Record Offer"}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* Auto-submit to all NBFCs */}
+                          {(req.financing_status === "requested" || req.financing_status === "under_review") && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleSubmitToNBFCs(req.id)}
+                              disabled={submittingToNBFC === req.id}
+                              className="bg-[#0A192F] hover:bg-[#1E293B] text-white text-xs"
+                              data-testid={`submit-nbfc-${req.id}`}
+                            >
+                              <Zap className="w-3 h-3 mr-1" />
+                              {submittingToNBFC === req.id ? "Submitting..." : "Submit to NBFCs"}
+                            </Button>
+                          )}
+
+                          {/* View / compare all NBFC offers */}
+                          {(req.financing_status === "sent_to_nbfc" || req.financing_status === "nbfc_offer_received") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => navigate(`/admin/finance-requests/${req.id}/offers`)}
+                              className="text-xs"
+                              data-testid={`view-offers-${req.id}`}
+                            >
+                              <BarChart2 className="w-3 h-3 mr-1" />
+                              View Offers
+                            </Button>
+                          )}
+
+                          {/* Manual offer entry (fallback for non-automated NBFCs) */}
+                          {req.financing_status === "sent_to_nbfc" && !req.nbfc_partner && (
+                            <Dialog open={showOfferModal && selectedRequest?.id === req.id} onOpenChange={(open) => {
+                              setShowOfferModal(open);
+                              if (open) setSelectedRequest(req);
+                            }}>
+                              <DialogTrigger asChild>
+                                <Button size="sm" variant="outline" className="text-xs">
+                                  <Send className="w-3 h-3 mr-1" />
+                                  Manual Entry
                                 </Button>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        )}
-                        {req.financing_status === "accepted_by_exporter" && (
-                          <Badge className="bg-emerald-500 text-white">
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Completed
-                          </Badge>
-                        )}
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Record NBFC Offer Manually</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4 mt-4">
+                                  <div>
+                                    <Label className="text-xs uppercase tracking-wider text-slate-500">NBFC Partner *</Label>
+                                    <Input
+                                      value={offerData.nbfc_partner}
+                                      onChange={(e) => setOfferData({ ...offerData, nbfc_partner: e.target.value })}
+                                      className="mt-1.5"
+                                      placeholder="e.g., HDFC Bank, ICICI"
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <Label className="text-xs uppercase tracking-wider text-slate-500">Offer Amount (₹) *</Label>
+                                      <Input
+                                        type="number"
+                                        value={offerData.offer_amount}
+                                        onChange={(e) => setOfferData({ ...offerData, offer_amount: e.target.value })}
+                                        className="mt-1.5"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs uppercase tracking-wider text-slate-500">Interest Rate (% p.a.) *</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.1"
+                                        value={offerData.interest_rate}
+                                        onChange={(e) => setOfferData({ ...offerData, interest_rate: e.target.value })}
+                                        className="mt-1.5"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs uppercase tracking-wider text-slate-500">Notes</Label>
+                                    <Textarea
+                                      value={offerData.admin_notes}
+                                      onChange={(e) => setOfferData({ ...offerData, admin_notes: e.target.value })}
+                                      className="mt-1.5"
+                                      rows={3}
+                                    />
+                                  </div>
+                                  <Button
+                                    onClick={handleRecordOffer}
+                                    disabled={submitting}
+                                    className="w-full bg-[#0A192F] hover:bg-[#1E293B] text-white"
+                                  >
+                                    {submitting ? "Saving..." : "Record Offer"}
+                                  </Button>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          )}
+
+                          {req.financing_status === "accepted_by_exporter" && (
+                            <Badge className="bg-emerald-500 text-white">
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Completed
+                            </Badge>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

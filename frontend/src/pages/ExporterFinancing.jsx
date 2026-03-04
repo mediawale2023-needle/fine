@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Wallet, Plus, RefreshCw, TrendingUp, AlertTriangle, CheckCircle, Clock, Building2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Wallet, Plus, RefreshCw, TrendingUp, AlertTriangle, CheckCircle, Clock, Building2, BarChart2 } from "lucide-react";
 
 const PAYMENT_METHODS = [
   { value: "LC", label: "Letter of Credit (LC)" },
@@ -18,6 +19,7 @@ const PAYMENT_METHODS = [
 
 export default function ExporterFinancing() {
   const { authAxios, user } = useAuth();
+  const navigate = useNavigate();
   const [financeRequests, setFinanceRequests] = useState([]);
   const [myDeals, setMyDeals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -381,17 +383,30 @@ export default function ExporterFinancing() {
                         <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-sm">
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="text-xs uppercase text-emerald-600 font-medium">NBFC Offer from {req.nbfc_partner}</p>
+                              <p className="text-xs uppercase text-emerald-600 font-medium">Best Offer · {req.nbfc_partner}</p>
                               <p className="text-lg font-bold text-emerald-800">
                                 ₹{req.nbfc_offer_amount?.toLocaleString()} @ {req.nbfc_interest_rate}% p.a.
                               </p>
                             </div>
-                            <Button
-                              onClick={() => handleAcceptOffer(req.id)}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                            >
-                              Accept Offer
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate(`/exporter/finance-requests/${req.id}/offers`)}
+                                className="border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                                data-testid={`compare-offers-${req.id}`}
+                              >
+                                <BarChart2 className="w-4 h-4 mr-1" />
+                                Compare All Offers
+                              </Button>
+                              <Button
+                                onClick={() => handleAcceptOffer(req.id)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                data-testid={`accept-offer-${req.id}`}
+                              >
+                                Accept Best Offer
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       )}

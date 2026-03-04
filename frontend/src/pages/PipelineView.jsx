@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { RefreshCw, Building2, Package, ChevronRight, ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { RefreshCw, Building2, Package, ChevronRight, ArrowRight, MessageSquare } from "lucide-react";
 
 const STAGES = ["Received", "Interest", "Shortlisted", "Introduction", "Negotiation", "Closed"];
 
@@ -20,6 +21,7 @@ const stageColors = {
 
 export default function PipelineView() {
   const { authAxios } = useAuth();
+  const navigate = useNavigate();
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -130,6 +132,16 @@ export default function PipelineView() {
                             </p>
                           </div>
                         </div>
+
+                        {/* Deal Room link */}
+                        <button
+                          onClick={() => navigate(`/deals/${deal.id}/room`)}
+                          className="w-full flex items-center gap-1.5 text-xs text-slate-400 hover:text-[#0A192F] mb-2 transition-colors"
+                          data-testid={`deal-room-${deal.id}`}
+                        >
+                          <MessageSquare className="w-3 h-3" />
+                          Open Deal Room
+                        </button>
 
                         {/* Move to next stage */}
                         {stage !== "Closed" && (
