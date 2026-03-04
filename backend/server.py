@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -7,12 +7,16 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
 import json
+import hashlib
+import hmac
+import base64
+import httpx
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -42,6 +46,38 @@ SECTORS = ["Agriculture", "Marine / Frozen Foods", "Pharma", "Special Chemicals"
 REGIONS = ["Africa", "Middle East", "Europe"]
 ENGAGEMENT_MODES = ["Introduction-only", "Introduction + Negotiation Support"]
 PIPELINE_STAGES = ["Received", "Interest", "Shortlisted", "Introduction", "Negotiation", "Closed"]
+
+# Razorpay config
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_placeholder")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "placeholder_secret")
+
+# NBFC partner configuration
+NBFC_PARTNERS = {
+    "credlix": {
+        "name": "Credlix",
+        "api_url": os.environ.get("CREDLIX_API_URL", ""),
+        "api_key": os.environ.get("CREDLIX_API_KEY", ""),
+        "commission_rate": 0.02,
+    },
+    "drip_capital": {
+        "name": "Drip Capital",
+        "api_url": os.environ.get("DRIP_CAPITAL_API_URL", ""),
+        "api_key": os.environ.get("DRIP_CAPITAL_API_KEY", ""),
+        "commission_rate": 0.018,
+    },
+    "vayana": {
+        "name": "Vayana Network",
+        "api_url": os.environ.get("VAYANA_API_URL", ""),
+        "api_key": os.environ.get("VAYANA_API_KEY", ""),
+        "commission_rate": 0.022,
+    },
+}
+
+# WhatsApp / Twilio config
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
+
 CERTIFICATIONS = {
     "Agriculture": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal"],
     "Marine / Frozen Foods": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal"],
@@ -138,6 +174,140 @@ class ExpressInterestRequest(BaseModel):
 
 class AIParseRequest(BaseModel):
     raw_text: str
+
+# ---- Buyer Models ----
+class BuyerProfileCreate(BaseModel):
+    company_name: str
+    country: str
+    industry: str
+    annual_import_volume: Optional[str] = None
+    preferred_sectors: List[str] = []
+
+class BuyerProfileResponse(BaseModel):
+    id: str
+    user_id: str
+    company_name: str
+    country: str
+    industry: str
+    annual_import_volume: Optional[str] = None
+    preferred_sectors: List[str] = []
+    verified: bool = False
+    created_at: str
+
+class BuyerRFQCreate(BaseModel):
+    product_name: str
+    sector: str
+    quantity: str
+    delivery_country: str
+    region: str
+    delivery_timeline: str
+    compliance_requirements: List[str] = []
+    hs_code: Optional[str] = None
+    budget_range: Optional[str] = None
+    notes: Optional[str] = None
+
+class BuyerRFQResponse(BaseModel):
+    id: str
+    buyer_id: str
+    buyer_company: str
+    product_name: str
+    sector: str
+    quantity: str
+    delivery_country: str
+    region: str
+    delivery_timeline: str
+    compliance_requirements: List[str]
+    hs_code: Optional[str] = None
+    budget_range: Optional[str] = None
+    notes: Optional[str] = None
+    status: str
+    listing_fee_paid: bool = False
+    matched_exporters: List[dict] = []
+    created_at: str
+
+# ---- Deal Room / Messaging Models ----
+class MessageCreate(BaseModel):
+    content: str
+    attachment_url: Optional[str] = None
+    attachment_name: Optional[str] = None
+
+class MessageResponse(BaseModel):
+    id: str
+    deal_id: str
+    sender_id: str
+    sender_name: str
+    sender_role: str
+    content: str
+    attachment_url: Optional[str] = None
+    attachment_name: Optional[str] = None
+    read_by: List[str] = []
+    created_at: str
+
+# ---- Document Models ----
+class DocumentResponse(BaseModel):
+    id: str
+    deal_id: Optional[str] = None
+    uploaded_by: str
+    filename: str
+    doc_type: str
+    parsed_data: Optional[dict] = None
+    url: Optional[str] = None
+    created_at: str
+
+# ---- Razorpay Models ----
+class PaymentOrderCreate(BaseModel):
+    plan: str
+
+class PaymentVerify(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    plan: str
+
+# ---- NBFC Automation Models ----
+class NBFCSubmitResponse(BaseModel):
+    request_id: str
+    submitted_to: List[str]
+    message: str
+
+class NBFCOfferWebhook(BaseModel):
+    nbfc_partner: str
+    request_id: str
+    offer_amount: float
+    interest_rate: float
+    tenure_months: int
+    processing_fee: float
+    notes: Optional[str] = None
+
+# ---- Market Intelligence Models ----
+class SectorInsightResponse(BaseModel):
+    sector: str
+    total_opportunities: int
+    total_deals: int
+    avg_deal_value_inr: float
+    top_markets: List[dict]
+    avg_time_to_close_days: float
+    win_rate: float
+    compliance_frequency: List[dict]
+
+class MarketInsightResponse(BaseModel):
+    country: str
+    region: str
+    total_opportunities: int
+    top_sectors: List[dict]
+    avg_quantity: str
+    typical_compliance: List[str]
+
+class PlatformOverviewResponse(BaseModel):
+    total_opportunities: int
+    total_deals: int
+    total_exporters: int
+    total_buyers: int
+    closed_deals: int
+    total_revenue_inr: float
+    sector_breakdown: List[dict]
+    region_breakdown: List[dict]
+    monthly_trend: List[dict]
 
 # ===================== TRADE FINANCE MODELS =====================
 
@@ -242,6 +412,16 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 async def require_admin(user: dict = Depends(get_current_user)):
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+async def require_exporter(user: dict = Depends(get_current_user)):
+    if user.get("role") != "exporter":
+        raise HTTPException(status_code=403, detail="Exporter access required")
+    return user
+
+async def require_buyer(user: dict = Depends(get_current_user)):
+    if user.get("role") != "buyer":
+        raise HTTPException(status_code=403, detail="Buyer access required")
     return user
 
 # ===================== AI SERVICE =====================
@@ -560,6 +740,148 @@ async def check_subscription_valid(user_id: str) -> bool:
     
     return True
 
+# ===================== WHATSAPP NOTIFICATION SERVICE =====================
+
+async def send_whatsapp_notification(phone: str, message: str):
+    """Send WhatsApp notification via Twilio. Silently skips if credentials not configured."""
+    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
+        logger.info(f"WhatsApp (mock) → {phone}: {message[:80]}")
+        return
+    try:
+        async with httpx.AsyncClient() as client_http:
+            await client_http.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json",
+                auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
+                data={
+                    "From": TWILIO_WHATSAPP_FROM,
+                    "To": f"whatsapp:{phone}",
+                    "Body": message,
+                },
+                timeout=10,
+            )
+    except Exception as e:
+        logger.warning(f"WhatsApp notification failed: {e}")
+
+async def notify_deal_stage_change(deal_id: str, new_stage: str):
+    """Notify exporter via WhatsApp when deal stage changes."""
+    deal = await db.deals.find_one({"id": deal_id}, {"_id": 0})
+    if not deal:
+        return
+    user = await db.users.find_one({"id": deal.get("exporter_user_id")}, {"_id": 0})
+    if not user or not user.get("whatsapp_phone"):
+        return
+    opp = await db.opportunities.find_one({"id": deal.get("opportunity_id")}, {"_id": 0})
+    product = opp.get("product_name", "your deal") if opp else "your deal"
+    msg = (
+        f"🚀 TradeNexus Update\n\n"
+        f"Your deal for *{product}* has moved to stage: *{new_stage}*\n\n"
+        f"Login to TradeNexus to view details and take action."
+    )
+    await send_whatsapp_notification(user["whatsapp_phone"], msg)
+
+async def notify_nbfc_offer_received(finance_request_id: str):
+    """Notify exporter when NBFC offer arrives."""
+    req = await db.finance_requests.find_one({"id": finance_request_id}, {"_id": 0})
+    if not req:
+        return
+    user = await db.users.find_one({"id": req.get("exporter_id")}, {"_id": 0})
+    if not user or not user.get("whatsapp_phone"):
+        return
+    msg = (
+        f"💰 TradeNexus — Financing Offer Ready\n\n"
+        f"An NBFC has made an offer on your financing request.\n"
+        f"*Partner:* {req.get('nbfc_partner', 'NBFC')}\n"
+        f"*Amount:* ₹{req.get('nbfc_offer_amount', 0):,.0f}\n"
+        f"*Rate:* {req.get('nbfc_interest_rate', 0)}% p.a.\n\n"
+        f"Login to TradeNexus to accept or reject."
+    )
+    await send_whatsapp_notification(user["whatsapp_phone"], msg)
+
+async def notify_new_opportunity_matched(exporter_user_id: str, product_name: str, opportunity_id: str):
+    """Notify exporter about a new matched opportunity."""
+    user = await db.users.find_one({"id": exporter_user_id}, {"_id": 0})
+    if not user or not user.get("whatsapp_phone"):
+        return
+    msg = (
+        f"🌍 TradeNexus — New Opportunity\n\n"
+        f"A new opportunity matching your profile is available:\n"
+        f"*Product:* {product_name}\n\n"
+        f"Reply *1* to Express Interest or login to TradeNexus."
+    )
+    await send_whatsapp_notification(user["whatsapp_phone"], msg)
+
+# ===================== AI DOCUMENT PARSER =====================
+
+async def ai_parse_document(content: str, doc_hint: str = "") -> dict:
+    """Use AI to parse trade documents (LC, Invoice, BL) into structured data."""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            return _mock_document_parse(content, doc_hint)
+
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"doc-parse-{uuid.uuid4()}",
+            system_message="""You are a trade document parser. Extract structured data from Letters of Credit, Invoices, and Bills of Lading.
+Return ONLY valid JSON:
+{
+  "doc_type": "LC|Invoice|Bill of Lading|Certificate of Origin|Other",
+  "product_name": "extracted product",
+  "hs_code": "HS code or null",
+  "quantity": "quantity with unit",
+  "value_usd": number or null,
+  "buyer_name": "buyer company",
+  "seller_name": "seller/exporter company",
+  "origin_country": "country of origin",
+  "destination_country": "destination",
+  "delivery_date": "date string",
+  "payment_terms": "payment terms",
+  "compliance_requirements": ["list of certificates mentioned"],
+  "currency": "USD|EUR|INR etc",
+  "key_notes": "any important clauses or conditions"
+}"""
+        ).with_model("openai", "gpt-5.2")
+
+        response = await chat.send_message(UserMessage(text=f"Parse this trade document:\n\n{content}"))
+        try:
+            start = response.find("{")
+            end = response.rfind("}") + 1
+            if start != -1 and end > start:
+                return json.loads(response[start:end])
+        except json.JSONDecodeError:
+            pass
+        return _mock_document_parse(content, doc_hint)
+    except Exception as e:
+        logger.error(f"Document parsing error: {e}")
+        return _mock_document_parse(content, doc_hint)
+
+def _mock_document_parse(content: str, doc_hint: str = "") -> dict:
+    content_lower = content.lower()
+    doc_type = "Invoice"
+    if "letter of credit" in content_lower or "l/c" in content_lower or "lc no" in content_lower:
+        doc_type = "LC"
+    elif "bill of lading" in content_lower or "b/l" in content_lower:
+        doc_type = "Bill of Lading"
+    elif "certificate" in content_lower:
+        doc_type = "Certificate of Origin"
+    return {
+        "doc_type": doc_type,
+        "product_name": "Agricultural Products",
+        "hs_code": None,
+        "quantity": "1000 MT",
+        "value_usd": 500000,
+        "buyer_name": "International Trading Co.",
+        "seller_name": "Indian Exports Ltd.",
+        "origin_country": "India",
+        "destination_country": "UAE",
+        "delivery_date": "2025-03-31",
+        "payment_terms": "LC at sight",
+        "compliance_requirements": ["FSSAI", "ISO 22000"],
+        "currency": "USD",
+        "key_notes": "Parsed by mock parser. Upload real document for accurate extraction.",
+    }
+
 # ===================== AUTH ROUTES =====================
 
 @api_router.post("/auth/register", response_model=TokenResponse, status_code=201)
@@ -568,7 +890,7 @@ async def register(data: UserCreate):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    if data.role not in ["admin", "exporter"]:
+    if data.role not in ["admin", "exporter", "buyer"]:
         raise HTTPException(status_code=400, detail="Invalid role")
     
     user_id = str(uuid.uuid4())
@@ -880,7 +1202,8 @@ async def update_deal_stage(deal_id: str, stage: str, user: dict = Depends(requi
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Deal not found")
-    
+
+    await notify_deal_stage_change(deal_id, stage)
     return {"message": "Stage updated"}
 
 @api_router.get("/interests")
@@ -1464,6 +1787,720 @@ async def seed_data():
         })
     
     return {"message": "Demo data seeded successfully"}
+
+# ===================== RAZORPAY PAYMENT ROUTES =====================
+
+@api_router.post("/payments/create-order")
+async def create_payment_order(data: PaymentOrderCreate, user: dict = Depends(require_exporter)):
+    """Create a Razorpay order for subscription payment."""
+    plan = data.plan
+    if plan not in SUBSCRIPTION_PLANS:
+        raise HTTPException(status_code=400, detail=f"Invalid plan. Must be one of: {SUBSCRIPTION_PLANS}")
+
+    amount_paise = SUBSCRIPTION_PRICES.get(plan, 9999) * 100  # Razorpay uses paise
+
+    # If Razorpay keys are configured, create real order; otherwise return mock
+    if RAZORPAY_KEY_ID and RAZORPAY_KEY_ID != "rzp_test_placeholder":
+        try:
+            import razorpay
+            rz_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+            order = rz_client.order.create({
+                "amount": amount_paise,
+                "currency": "INR",
+                "notes": {"plan": plan, "user_id": user["id"]},
+            })
+            return {
+                "order_id": order["id"],
+                "amount": amount_paise,
+                "currency": "INR",
+                "plan": plan,
+                "key_id": RAZORPAY_KEY_ID,
+            }
+        except Exception as e:
+            logger.error(f"Razorpay order creation failed: {e}")
+            raise HTTPException(status_code=500, detail="Payment gateway error")
+
+    # Mock order for development/testing
+    mock_order_id = f"order_mock_{uuid.uuid4().hex[:16]}"
+    return {
+        "order_id": mock_order_id,
+        "amount": amount_paise,
+        "currency": "INR",
+        "plan": plan,
+        "key_id": RAZORPAY_KEY_ID,
+        "mock": True,
+    }
+
+@api_router.post("/payments/verify")
+async def verify_payment(data: PaymentVerify, user: dict = Depends(require_exporter)):
+    """Verify Razorpay payment signature and activate subscription."""
+    plan = data.plan
+    if plan not in SUBSCRIPTION_PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+
+    # Verify signature (skip for mock orders)
+    is_mock = data.razorpay_order_id.startswith("order_mock_")
+    if not is_mock:
+        expected_sig = hmac.new(
+            RAZORPAY_KEY_SECRET.encode(),
+            f"{data.razorpay_order_id}|{data.razorpay_payment_id}".encode(),
+            hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(expected_sig, data.razorpay_signature):
+            raise HTTPException(status_code=400, detail="Invalid payment signature")
+
+    # Activate subscription
+    expiry_date = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "subscription_plan": plan,
+            "subscription_status": "active",
+            "subscription_expiry": expiry_date,
+        }}
+    )
+
+    # Record revenue
+    revenue_id = str(uuid.uuid4())
+    await db.revenue_records.insert_one({
+        "id": revenue_id,
+        "revenue_type": "subscription",
+        "exporter_id": user["id"],
+        "amount": SUBSCRIPTION_PRICES.get(plan, 9999),
+        "description": f"{plan} subscription - 1 year",
+        "razorpay_order_id": data.razorpay_order_id,
+        "razorpay_payment_id": data.razorpay_payment_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    return {
+        "message": "Subscription activated",
+        "plan": plan,
+        "expiry": expiry_date,
+    }
+
+# ===================== BUYER PORTAL ROUTES =====================
+
+@api_router.post("/buyer/profile", response_model=BuyerProfileResponse, status_code=201)
+async def create_buyer_profile(data: BuyerProfileCreate, user: dict = Depends(require_buyer)):
+    existing = await db.buyer_profiles.find_one({"user_id": user["id"]})
+    if existing:
+        raise HTTPException(status_code=400, detail="Profile already exists")
+
+    profile_id = str(uuid.uuid4())
+    doc = {
+        "id": profile_id,
+        "user_id": user["id"],
+        "company_name": data.company_name,
+        "country": data.country,
+        "industry": data.industry,
+        "annual_import_volume": data.annual_import_volume,
+        "preferred_sectors": data.preferred_sectors,
+        "verified": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.buyer_profiles.insert_one(doc)
+    return BuyerProfileResponse(**{k: v for k, v in doc.items() if k != "_id"})
+
+@api_router.get("/buyer/profile", response_model=BuyerProfileResponse)
+async def get_buyer_profile(user: dict = Depends(require_buyer)):
+    profile = await db.buyer_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return BuyerProfileResponse(**profile)
+
+@api_router.put("/buyer/profile", response_model=BuyerProfileResponse)
+async def update_buyer_profile(data: BuyerProfileCreate, user: dict = Depends(require_buyer)):
+    result = await db.buyer_profiles.update_one(
+        {"user_id": user["id"]},
+        {"$set": data.model_dump()}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Profile not found. Create it first.")
+    profile = await db.buyer_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    return BuyerProfileResponse(**profile)
+
+@api_router.post("/buyer/rfqs", response_model=BuyerRFQResponse, status_code=201)
+async def create_buyer_rfq(data: BuyerRFQCreate, user: dict = Depends(require_buyer)):
+    """Buyer posts a new RFQ. Auto-scores and matches exporters."""
+    profile = await db.buyer_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=400, detail="Please complete your buyer profile first")
+
+    opp_score, risk_score = await ai_score_opportunity(data.model_dump())
+
+    rfq_id = str(uuid.uuid4())
+    rfq_doc = {
+        "id": rfq_id,
+        "buyer_id": user["id"],
+        "buyer_company": user["company_name"],
+        "product_name": data.product_name,
+        "sector": data.sector,
+        "quantity": data.quantity,
+        "delivery_country": data.delivery_country,
+        "region": data.region,
+        "delivery_timeline": data.delivery_timeline,
+        "compliance_requirements": data.compliance_requirements,
+        "hs_code": data.hs_code,
+        "budget_range": data.budget_range,
+        "notes": data.notes,
+        "opportunity_score": opp_score,
+        "risk_score": risk_score,
+        "status": "Active",
+        "listing_fee_paid": False,
+        "matched_exporters": [],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "source": "buyer_portal",
+    }
+    await db.buyer_rfqs.insert_one(rfq_doc)
+
+    # Also insert into main opportunities collection so exporters can see it
+    opp_doc = {
+        "id": rfq_id,
+        "sector": data.sector,
+        "source_country": data.delivery_country,
+        "region": data.region,
+        "product_name": data.product_name,
+        "hs_code": data.hs_code,
+        "quantity": data.quantity,
+        "delivery_timeline": data.delivery_timeline,
+        "compliance_requirements": data.compliance_requirements,
+        "engagement_mode": "Introduction + Negotiation Support",
+        "opportunity_score": opp_score,
+        "risk_score": risk_score,
+        "status": "Active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user["id"],
+        "buyer_rfq": True,
+        "matched_exporters": [],
+    }
+    await db.opportunities.insert_one(opp_doc)
+
+    # Auto-run matchmaking
+    profiles = await db.exporter_profiles.find({}, {"_id": 0}).to_list(100)
+    for p in profiles:
+        u = await db.users.find_one({"id": p["user_id"]}, {"_id": 0})
+        if u:
+            p["company_name"] = u.get("company_name", "Unknown")
+    ranked = await ai_rank_exporters(rfq_doc, profiles)
+    matched = [{"exporter_id": e["id"], "company_name": e.get("company_name"), "match_score": e.get("match_score", 0)} for e in ranked]
+    await db.buyer_rfqs.update_one({"id": rfq_id}, {"$set": {"matched_exporters": matched}})
+    await db.opportunities.update_one({"id": rfq_id}, {"$set": {"matched_exporters": matched}})
+
+    # Notify matched exporters via WhatsApp
+    for match in matched[:3]:
+        exporter_profile = await db.exporter_profiles.find_one({"id": match["exporter_id"]}, {"_id": 0})
+        if exporter_profile:
+            await notify_new_opportunity_matched(exporter_profile["user_id"], data.product_name, rfq_id)
+
+    rfq_doc["matched_exporters"] = matched
+    return BuyerRFQResponse(**{k: v for k, v in rfq_doc.items() if k not in ("_id", "opportunity_score", "risk_score", "source")})
+
+@api_router.get("/buyer/rfqs", response_model=List[BuyerRFQResponse])
+async def get_buyer_rfqs(user: dict = Depends(require_buyer)):
+    rfqs = await db.buyer_rfqs.find({"buyer_id": user["id"]}, {"_id": 0}).to_list(100)
+    return [BuyerRFQResponse(**{k: v for k, v in r.items() if k not in ("opportunity_score", "risk_score", "source")}) for r in rfqs]
+
+@api_router.get("/buyer/rfqs/{rfq_id}", response_model=BuyerRFQResponse)
+async def get_buyer_rfq(rfq_id: str, user: dict = Depends(require_buyer)):
+    rfq = await db.buyer_rfqs.find_one({"id": rfq_id, "buyer_id": user["id"]}, {"_id": 0})
+    if not rfq:
+        raise HTTPException(status_code=404, detail="RFQ not found")
+    return BuyerRFQResponse(**{k: v for k, v in rfq.items() if k not in ("opportunity_score", "risk_score", "source")})
+
+@api_router.get("/admin/buyer-rfqs")
+async def admin_get_all_rfqs(user: dict = Depends(require_admin)):
+    rfqs = await db.buyer_rfqs.find({}, {"_id": 0}).to_list(200)
+    return rfqs
+
+@api_router.put("/admin/buyer-rfqs/{rfq_id}/verify-payment")
+async def admin_verify_rfq_payment(rfq_id: str, user: dict = Depends(require_admin)):
+    result = await db.buyer_rfqs.update_one({"id": rfq_id}, {"$set": {"listing_fee_paid": True}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="RFQ not found")
+    return {"message": "Listing fee marked as paid"}
+
+# ===================== DEAL ROOM (MESSAGING) ROUTES =====================
+
+@api_router.get("/deals/{deal_id}/messages", response_model=List[MessageResponse])
+async def get_deal_messages(deal_id: str, user: dict = Depends(get_current_user)):
+    deal = await db.deals.find_one({"id": deal_id}, {"_id": 0})
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    # Access control: admin sees all, exporter only sees their own deals
+    if user["role"] == "exporter" and deal.get("exporter_user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    messages = await db.deal_messages.find({"deal_id": deal_id}, {"_id": 0}).sort("created_at", 1).to_list(500)
+
+    # Mark as read
+    await db.deal_messages.update_many(
+        {"deal_id": deal_id, "read_by": {"$nin": [user["id"]]}},
+        {"$push": {"read_by": user["id"]}}
+    )
+
+    return [MessageResponse(**m) for m in messages]
+
+@api_router.post("/deals/{deal_id}/messages", response_model=MessageResponse, status_code=201)
+async def post_deal_message(deal_id: str, data: MessageCreate, user: dict = Depends(get_current_user)):
+    deal = await db.deals.find_one({"id": deal_id}, {"_id": 0})
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    if user["role"] == "exporter" and deal.get("exporter_user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    msg_id = str(uuid.uuid4())
+    msg_doc = {
+        "id": msg_id,
+        "deal_id": deal_id,
+        "sender_id": user["id"],
+        "sender_name": user["company_name"],
+        "sender_role": user["role"],
+        "content": data.content,
+        "attachment_url": data.attachment_url,
+        "attachment_name": data.attachment_name,
+        "read_by": [user["id"]],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.deal_messages.insert_one(msg_doc)
+    return MessageResponse(**{k: v for k, v in msg_doc.items() if k != "_id"})
+
+@api_router.get("/deals/{deal_id}/unread-count")
+async def get_unread_count(deal_id: str, user: dict = Depends(get_current_user)):
+    count = await db.deal_messages.count_documents({
+        "deal_id": deal_id,
+        "read_by": {"$nin": [user["id"]]},
+        "sender_id": {"$ne": user["id"]},
+    })
+    return {"deal_id": deal_id, "unread": count}
+
+# ===================== DOCUMENT INTELLIGENCE ROUTES =====================
+
+@api_router.post("/documents/parse")
+async def parse_document_text(
+    content: str = Form(...),
+    doc_hint: str = Form(""),
+    deal_id: Optional[str] = Form(None),
+    user: dict = Depends(get_current_user)
+):
+    """Parse trade document text using AI and optionally attach to a deal."""
+    parsed = await ai_parse_document(content, doc_hint)
+
+    doc_id = str(uuid.uuid4())
+    doc_record = {
+        "id": doc_id,
+        "deal_id": deal_id,
+        "uploaded_by": user["id"],
+        "filename": f"parsed_document_{doc_id[:8]}.txt",
+        "doc_type": parsed.get("doc_type", "Other"),
+        "parsed_data": parsed,
+        "url": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.documents.insert_one(doc_record)
+    return {"document_id": doc_id, "parsed": parsed}
+
+@api_router.post("/documents/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    deal_id: Optional[str] = Form(None),
+    user: dict = Depends(get_current_user)
+):
+    """Upload and parse a trade document (text extraction + AI parse)."""
+    MAX_SIZE = 5 * 1024 * 1024  # 5MB
+    content_bytes = await file.read()
+    if len(content_bytes) > MAX_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Max 5MB.")
+
+    # Extract text from file
+    text_content = ""
+    filename = file.filename or "upload"
+
+    if filename.endswith(".txt"):
+        text_content = content_bytes.decode("utf-8", errors="ignore")
+    elif filename.endswith(".pdf"):
+        try:
+            import pdfplumber
+            import io
+            with pdfplumber.open(io.BytesIO(content_bytes)) as pdf:
+                text_content = "\n".join(page.extract_text() or "" for page in pdf.pages)
+        except Exception:
+            text_content = content_bytes.decode("utf-8", errors="ignore")
+    else:
+        text_content = content_bytes.decode("utf-8", errors="ignore")
+
+    parsed = await ai_parse_document(text_content, filename)
+
+    # Store as base64 for retrieval
+    encoded = base64.b64encode(content_bytes).decode()
+    doc_id = str(uuid.uuid4())
+    doc_record = {
+        "id": doc_id,
+        "deal_id": deal_id,
+        "uploaded_by": user["id"],
+        "filename": filename,
+        "doc_type": parsed.get("doc_type", "Other"),
+        "parsed_data": parsed,
+        "content_b64": encoded,
+        "url": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.documents.insert_one(doc_record)
+    return {"document_id": doc_id, "filename": filename, "parsed": parsed}
+
+@api_router.get("/documents/deal/{deal_id}", response_model=List[DocumentResponse])
+async def get_deal_documents(deal_id: str, user: dict = Depends(get_current_user)):
+    deal = await db.deals.find_one({"id": deal_id}, {"_id": 0})
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    if user["role"] == "exporter" and deal.get("exporter_user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    docs = await db.documents.find({"deal_id": deal_id}, {"_id": 0, "content_b64": 0}).to_list(50)
+    return [DocumentResponse(**d) for d in docs]
+
+# ===================== NBFC AUTOMATION ROUTES =====================
+
+async def _simulate_nbfc_offer(nbfc_key: str, nbfc_info: dict, finance_request: dict) -> Optional[dict]:
+    """Simulate NBFC API call. Replace with real API integration per NBFC."""
+    api_url = nbfc_info.get("api_url")
+    api_key = nbfc_info.get("api_key")
+
+    if api_url and api_key:
+        try:
+            async with httpx.AsyncClient() as hc:
+                resp = await hc.post(
+                    f"{api_url}/finance/apply",
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json={
+                        "applicant_id": finance_request["exporter_id"],
+                        "amount_requested": finance_request["financing_amount_requested"],
+                        "deal_type": finance_request.get("collateral_type", "LC"),
+                        "tenure_months": 6,
+                    },
+                    timeout=15,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+        except Exception as e:
+            logger.warning(f"NBFC {nbfc_key} API call failed: {e}")
+            return None
+
+    # Simulate offer with realistic variance per partner
+    import random
+    base_rate = {"credlix": 12.5, "drip_capital": 13.0, "vayana": 11.8}.get(nbfc_key, 13.0)
+    requested = finance_request.get("financing_amount_requested", 0)
+    risk_score = finance_request.get("risk_score", 0.3)
+    approval_ratio = max(0.5, 0.9 - risk_score * 0.4)
+
+    return {
+        "nbfc_partner": nbfc_info["name"],
+        "offer_amount": round(requested * approval_ratio, 2),
+        "interest_rate": round(base_rate + random.uniform(-0.5, 1.0), 2),
+        "tenure_months": 6,
+        "processing_fee": round(requested * 0.005, 2),
+        "notes": f"Auto-offer from {nbfc_info['name']}. Subject to document verification.",
+    }
+
+@api_router.post("/finance-requests/{request_id}/submit-to-nbfcs", response_model=NBFCSubmitResponse)
+async def submit_to_nbfcs(request_id: str, user: dict = Depends(require_admin)):
+    """Fan out financing request to all configured NBFC partners simultaneously."""
+    req = await db.finance_requests.find_one({"id": request_id}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Finance request not found")
+
+    if req["financing_status"] not in ("requested", "under_review"):
+        raise HTTPException(status_code=400, detail="Request must be in requested/under_review state")
+
+    await db.finance_requests.update_one(
+        {"id": request_id},
+        {"$set": {"financing_status": "sent_to_nbfc", "submitted_to_nbfcs_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
+    # Fan out to all NBFC partners concurrently
+    import asyncio
+    tasks = {
+        key: _simulate_nbfc_offer(key, info, req)
+        for key, info in NBFC_PARTNERS.items()
+    }
+    results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+    submitted_to = []
+    all_offers = []
+
+    for nbfc_key, result in zip(tasks.keys(), results):
+        if isinstance(result, Exception) or result is None:
+            continue
+        submitted_to.append(NBFC_PARTNERS[nbfc_key]["name"])
+        all_offers.append({**result, "nbfc_key": nbfc_key, "received_at": datetime.now(timezone.utc).isoformat()})
+
+    # Store all offers; pick the best (lowest rate with highest amount)
+    if all_offers:
+        best = min(all_offers, key=lambda o: o.get("interest_rate", 99))
+        await db.finance_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "financing_status": "nbfc_offer_received",
+                "nbfc_partner": best["nbfc_partner"],
+                "nbfc_offer_amount": best["offer_amount"],
+                "nbfc_interest_rate": best["interest_rate"],
+                "nbfc_tenure_months": best.get("tenure_months", 6),
+                "nbfc_processing_fee": best.get("processing_fee", 0),
+                "nbfc_all_offers": all_offers,
+                "nbfc_offer_received_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+        await notify_nbfc_offer_received(request_id)
+
+    return NBFCSubmitResponse(
+        request_id=request_id,
+        submitted_to=submitted_to,
+        message=f"Submitted to {len(submitted_to)} NBFC(s). Best offer pre-selected." if submitted_to else "No NBFC responses received.",
+    )
+
+@api_router.get("/finance-requests/{request_id}/offers")
+async def get_nbfc_offers(request_id: str, user: dict = Depends(get_current_user)):
+    """Get all NBFC offers for a financing request (for comparison view)."""
+    req = await db.finance_requests.find_one({"id": request_id}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Finance request not found")
+
+    if user["role"] == "exporter" and req.get("exporter_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return {
+        "request_id": request_id,
+        "status": req.get("financing_status"),
+        "offers": req.get("nbfc_all_offers", []),
+        "selected_offer": {
+            "nbfc_partner": req.get("nbfc_partner"),
+            "offer_amount": req.get("nbfc_offer_amount"),
+            "interest_rate": req.get("nbfc_interest_rate"),
+            "tenure_months": req.get("nbfc_tenure_months"),
+            "processing_fee": req.get("nbfc_processing_fee"),
+        } if req.get("nbfc_partner") else None,
+    }
+
+@api_router.post("/webhooks/nbfc-offer")
+async def nbfc_offer_webhook(data: NBFCOfferWebhook):
+    """Receive NBFC offer via webhook (for real NBFC API integrations)."""
+    req = await db.finance_requests.find_one({"id": data.request_id}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Finance request not found")
+
+    offer = {
+        "nbfc_partner": data.nbfc_partner,
+        "offer_amount": data.offer_amount,
+        "interest_rate": data.interest_rate,
+        "tenure_months": data.tenure_months,
+        "processing_fee": data.processing_fee,
+        "notes": data.notes,
+        "received_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    await db.finance_requests.update_one(
+        {"id": data.request_id},
+        {
+            "$set": {
+                "financing_status": "nbfc_offer_received",
+                "nbfc_partner": data.nbfc_partner,
+                "nbfc_offer_amount": data.offer_amount,
+                "nbfc_interest_rate": data.interest_rate,
+                "nbfc_tenure_months": data.tenure_months,
+                "nbfc_processing_fee": data.processing_fee,
+            },
+            "$push": {"nbfc_all_offers": offer},
+        }
+    )
+    await notify_nbfc_offer_received(data.request_id)
+    return {"message": "Offer recorded"}
+
+# ===================== MARKET INTELLIGENCE ROUTES =====================
+
+@api_router.get("/insights/overview", response_model=PlatformOverviewResponse)
+async def get_platform_overview(user: dict = Depends(get_current_user)):
+    """Platform-wide KPIs. Full detail for admin, summary for exporters."""
+    total_opps = await db.opportunities.count_documents({})
+    total_deals = await db.deals.count_documents({})
+    closed_deals = await db.deals.count_documents({"stage": "Closed"})
+    total_exporters = await db.exporter_profiles.count_documents({})
+    total_buyers = await db.buyer_profiles.count_documents({})
+
+    # Revenue total
+    revenue_docs = await db.revenue_records.find({}, {"_id": 0, "amount": 1}).to_list(10000)
+    total_revenue = sum(r.get("amount", 0) for r in revenue_docs)
+
+    # Sector breakdown
+    sector_breakdown = []
+    for sector in SECTORS:
+        count = await db.opportunities.count_documents({"sector": sector})
+        deals_in_sector = await db.deals.count_documents({})  # simplified
+        sector_breakdown.append({"sector": sector, "opportunities": count})
+
+    # Region breakdown
+    region_breakdown = []
+    for region in REGIONS:
+        count = await db.opportunities.count_documents({"region": region})
+        region_breakdown.append({"region": region, "opportunities": count})
+
+    # Monthly trend (last 6 months)
+    monthly_trend = []
+    now = datetime.now(timezone.utc)
+    for i in range(5, -1, -1):
+        month_start = (now.replace(day=1) - timedelta(days=i * 30)).replace(day=1)
+        month_end = month_start.replace(day=28) + timedelta(days=4)
+        month_end = month_end.replace(day=1)
+        month_label = month_start.strftime("%b %Y")
+        count = await db.opportunities.count_documents({
+            "created_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()}
+        })
+        deal_count = await db.deals.count_documents({
+            "created_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()}
+        })
+        monthly_trend.append({"month": month_label, "opportunities": count, "deals": deal_count})
+
+    return PlatformOverviewResponse(
+        total_opportunities=total_opps,
+        total_deals=total_deals,
+        total_exporters=total_exporters,
+        total_buyers=total_buyers,
+        closed_deals=closed_deals,
+        total_revenue_inr=total_revenue if user["role"] == "admin" else 0,
+        sector_breakdown=sector_breakdown,
+        region_breakdown=region_breakdown,
+        monthly_trend=monthly_trend,
+    )
+
+@api_router.get("/insights/sector/{sector}")
+async def get_sector_insight(sector: str, user: dict = Depends(get_current_user)):
+    """Deep sector intelligence — opportunity patterns, top markets, compliance requirements."""
+    if sector not in SECTORS:
+        raise HTTPException(status_code=400, detail=f"Invalid sector. Choose from: {SECTORS}")
+
+    opportunities = await db.opportunities.find({"sector": sector}, {"_id": 0}).to_list(500)
+    deals = await db.deals.find({}, {"_id": 0}).to_list(500)
+
+    # Top destination markets
+    market_counts: Dict[str, int] = {}
+    for opp in opportunities:
+        country = opp.get("source_country", "Unknown")
+        market_counts[country] = market_counts.get(country, 0) + 1
+    top_markets = sorted(
+        [{"country": k, "opportunities": v} for k, v in market_counts.items()],
+        key=lambda x: x["opportunities"], reverse=True
+    )[:5]
+
+    # Compliance frequency
+    compliance_counts: Dict[str, int] = {}
+    for opp in opportunities:
+        for cert in opp.get("compliance_requirements", []):
+            compliance_counts[cert] = compliance_counts.get(cert, 0) + 1
+    compliance_frequency = sorted(
+        [{"cert": k, "count": v} for k, v in compliance_counts.items()],
+        key=lambda x: x["count"], reverse=True
+    )
+
+    # Closed deals for win rate
+    sector_opp_ids = {opp["id"] for opp in opportunities}
+    sector_deals = [d for d in deals if d.get("opportunity_id") in sector_opp_ids]
+    closed_sector_deals = [d for d in sector_deals if d.get("stage") == "Closed"]
+    win_rate = len(closed_sector_deals) / len(sector_deals) if sector_deals else 0
+
+    return {
+        "sector": sector,
+        "total_opportunities": len(opportunities),
+        "total_deals": len(sector_deals),
+        "avg_deal_value_inr": 3500000,  # placeholder — enrich when deal value is tracked
+        "top_markets": top_markets,
+        "avg_time_to_close_days": 42,  # placeholder
+        "win_rate": round(win_rate, 3),
+        "compliance_frequency": compliance_frequency,
+        "active_opportunities": sum(1 for o in opportunities if o.get("status") == "Active"),
+    }
+
+@api_router.get("/insights/market/{country}")
+async def get_market_insight(country: str, user: dict = Depends(get_current_user)):
+    """Intelligence for a specific destination market/country."""
+    opportunities = await db.opportunities.find(
+        {"source_country": {"$regex": country, "$options": "i"}},
+        {"_id": 0}
+    ).to_list(500)
+
+    sector_counts: Dict[str, int] = {}
+    compliance_counts: Dict[str, int] = {}
+    regions = set()
+
+    for opp in opportunities:
+        s = opp.get("sector", "Unknown")
+        sector_counts[s] = sector_counts.get(s, 0) + 1
+        regions.add(opp.get("region", "Unknown"))
+        for cert in opp.get("compliance_requirements", []):
+            compliance_counts[cert] = compliance_counts.get(cert, 0) + 1
+
+    top_sectors = sorted(
+        [{"sector": k, "count": v} for k, v in sector_counts.items()],
+        key=lambda x: x["count"], reverse=True
+    )
+    typical_compliance = sorted(compliance_counts, key=lambda x: compliance_counts[x], reverse=True)[:5]
+
+    return {
+        "country": country,
+        "region": list(regions)[0] if regions else "Unknown",
+        "total_opportunities": len(opportunities),
+        "top_sectors": top_sectors,
+        "avg_quantity": "1500 MT",  # placeholder
+        "typical_compliance": typical_compliance,
+    }
+
+@api_router.get("/insights/exporter/benchmarks")
+async def get_exporter_benchmarks(user: dict = Depends(require_exporter)):
+    """Show an exporter how they compare to anonymous industry benchmarks."""
+    profile = await db.exporter_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Complete your profile first")
+
+    my_deals = await db.deals.find({"exporter_user_id": user["id"]}, {"_id": 0}).to_list(100)
+    my_interests = await db.interests.count_documents({"exporter_user_id": user["id"]})
+    my_closed = sum(1 for d in my_deals if d.get("stage") == "Closed")
+
+    all_deals = await db.deals.count_documents({})
+    all_closed = await db.deals.count_documents({"stage": "Closed"})
+    platform_win_rate = all_closed / all_deals if all_deals else 0
+    my_win_rate = my_closed / len(my_deals) if my_deals else 0
+
+    return {
+        "my_stats": {
+            "total_deals": len(my_deals),
+            "closed_deals": my_closed,
+            "win_rate": round(my_win_rate, 3),
+            "interests_expressed": my_interests,
+            "reliability_score": profile.get("reliability_score", 0),
+        },
+        "platform_benchmarks": {
+            "avg_win_rate": round(platform_win_rate, 3),
+            "avg_deals_per_exporter": round(all_deals / max(await db.exporter_profiles.count_documents({}), 1), 1),
+            "top_certifications": ["FSSAI", "ISO 22000", "HACCP"],
+            "top_markets": ["UAE", "Nigeria", "Germany"],
+        },
+    }
+
+# ===================== WHATSAPP PHONE UPDATE =====================
+
+@api_router.put("/profile/whatsapp")
+async def update_whatsapp_phone(phone: str, user: dict = Depends(get_current_user)):
+    """Exporter/buyer saves their WhatsApp number for notifications."""
+    # Basic validation
+    phone = phone.strip().replace(" ", "").replace("-", "")
+    if not phone.startswith("+"):
+        phone = "+91" + phone  # default to India
+    await db.users.update_one({"id": user["id"]}, {"$set": {"whatsapp_phone": phone}})
+    return {"message": "WhatsApp number updated", "phone": phone}
+
+@api_router.get("/profile/whatsapp")
+async def get_whatsapp_phone(user: dict = Depends(get_current_user)):
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0, "whatsapp_phone": 1})
+    return {"phone": u.get("whatsapp_phone") if u else None}
 
 # ===================== HEALTH CHECK =====================
 

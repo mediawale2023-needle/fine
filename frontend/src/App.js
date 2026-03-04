@@ -17,6 +17,14 @@ import ExporterFinancing from "@/pages/ExporterFinancing";
 import ExporterSubscription from "@/pages/ExporterSubscription";
 import AdminFinanceRequests from "@/pages/AdminFinanceRequests";
 import AdminRevenue from "@/pages/AdminRevenue";
+// New pages
+import BuyerDashboard from "@/pages/BuyerDashboard";
+import BuyerPostRFQ from "@/pages/BuyerPostRFQ";
+import BuyerProfile from "@/pages/BuyerProfile";
+import DealRoom from "@/pages/DealRoom";
+import MarketIntelligence from "@/pages/MarketIntelligence";
+import NBFCOfferComparison from "@/pages/NBFCOfferComparison";
+import DocumentIntelligence from "@/pages/DocumentIntelligence";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -128,7 +136,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to={user.role === "admin" ? "/admin" : "/exporter"} replace />;
+    const home = user.role === "admin" ? "/admin" : user.role === "buyer" ? "/buyer" : "/exporter";
+    return <Navigate to={home} replace />;
   }
 
   return children;
@@ -145,10 +154,14 @@ function AppRoutes() {
     );
   }
 
+  const homeRoute = user
+    ? (user.role === "admin" ? "/admin" : user.role === "buyer" ? "/buyer" : "/exporter")
+    : "/login";
+
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to={user.role === "admin" ? "/admin" : "/exporter"} /> : <LoginPage />} />
-      
+      <Route path="/login" element={user ? <Navigate to={homeRoute} /> : <LoginPage />} />
+
       {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
       <Route path="/admin/opportunity/:id" element={<ProtectedRoute allowedRoles={["admin"]}><OpportunityDetail /></ProtectedRoute>} />
@@ -156,14 +169,26 @@ function AppRoutes() {
       <Route path="/admin/pipeline" element={<ProtectedRoute allowedRoles={["admin"]}><PipelineView /></ProtectedRoute>} />
       <Route path="/admin/finance-requests" element={<ProtectedRoute allowedRoles={["admin"]}><AdminFinanceRequests /></ProtectedRoute>} />
       <Route path="/admin/revenue" element={<ProtectedRoute allowedRoles={["admin"]}><AdminRevenue /></ProtectedRoute>} />
-      
+      <Route path="/admin/finance-requests/:requestId/offers" element={<ProtectedRoute allowedRoles={["admin"]}><NBFCOfferComparison /></ProtectedRoute>} />
+
       {/* Exporter Routes */}
       <Route path="/exporter" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterDashboard /></ProtectedRoute>} />
       <Route path="/exporter/profile" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterProfile /></ProtectedRoute>} />
       <Route path="/exporter/financing" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterFinancing /></ProtectedRoute>} />
       <Route path="/exporter/subscription" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterSubscription /></ProtectedRoute>} />
       <Route path="/exporter/opportunity/:id" element={<ProtectedRoute allowedRoles={["exporter"]}><OpportunityDetail /></ProtectedRoute>} />
-      
+      <Route path="/exporter/finance-requests/:requestId/offers" element={<ProtectedRoute allowedRoles={["exporter"]}><NBFCOfferComparison /></ProtectedRoute>} />
+
+      {/* Buyer Routes */}
+      <Route path="/buyer" element={<ProtectedRoute allowedRoles={["buyer"]}><BuyerDashboard /></ProtectedRoute>} />
+      <Route path="/buyer/post-rfq" element={<ProtectedRoute allowedRoles={["buyer"]}><BuyerPostRFQ /></ProtectedRoute>} />
+      <Route path="/buyer/profile" element={<ProtectedRoute allowedRoles={["buyer"]}><BuyerProfile /></ProtectedRoute>} />
+
+      {/* Shared Routes */}
+      <Route path="/deals/:dealId/room" element={<ProtectedRoute allowedRoles={["admin", "exporter", "buyer"]}><DealRoom /></ProtectedRoute>} />
+      <Route path="/market-intelligence" element={<ProtectedRoute allowedRoles={["admin", "exporter", "buyer"]}><MarketIntelligence /></ProtectedRoute>} />
+      <Route path="/document-intelligence" element={<ProtectedRoute allowedRoles={["admin", "exporter"]}><DocumentIntelligence /></ProtectedRoute>} />
+
       {/* Default redirect */}
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />

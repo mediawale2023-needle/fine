@@ -8,14 +8,26 @@ import { toast } from "sonner";
 import { Building2, Lock, Mail, ArrowRight } from "lucide-react";
 import axios from "axios";
 
+const ROLE_OPTIONS = [
+  { value: "exporter", label: "Indian Exporter" },
+  { value: "buyer", label: "International Buyer" },
+];
+
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [role, setRole] = useState("exporter");
   const [loading, setLoading] = useState(false);
   const { login, register } = useAuth();
   const navigate = useNavigate();
+
+  const getHomeRoute = (userRole) => {
+    if (userRole === "admin") return "/admin";
+    if (userRole === "buyer") return "/buyer";
+    return "/exporter";
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,11 +36,11 @@ export default function LoginPage() {
       if (isLogin) {
         const user = await login(email, password);
         toast.success("Welcome back!");
-        navigate(user.role === "admin" ? "/admin" : "/exporter");
+        navigate(getHomeRoute(user.role));
       } else {
-        const user = await register(email, password, companyName, "exporter");
+        const user = await register(email, password, companyName, role);
         toast.success("Account created successfully!");
-        navigate("/exporter/profile");
+        navigate(role === "buyer" ? "/buyer/profile" : "/exporter/profile");
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || "Authentication failed");
@@ -91,30 +103,55 @@ export default function LoginPage() {
               {isLogin ? "Welcome Back" : "Create Account"}
             </h2>
             <p className="mt-2 text-slate-500">
-              {isLogin ? "Sign in to access your trade dashboard" : "Register as an exporter to view opportunities"}
+              {isLogin ? "Sign in to access your trade dashboard" : "Register to get started"}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {!isLogin && (
-              <div>
-                <Label htmlFor="company" className="text-xs uppercase tracking-wider text-slate-500 font-medium">
-                  Company Name
-                </Label>
-                <div className="mt-1.5 relative">
-                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    id="company"
-                    data-testid="company-input"
-                    type="text"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="pl-10 h-12 bg-white border-slate-300 focus:ring-gold focus:border-gold"
-                    placeholder="Your Company Ltd"
-                    required={!isLogin}
-                  />
+              <>
+                {/* Role selector */}
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-slate-500 font-medium">
+                    I am registering as
+                  </Label>
+                  <div className="mt-1.5 flex gap-2">
+                    {ROLE_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setRole(opt.value)}
+                        className={`flex-1 py-2.5 px-3 rounded-sm border text-sm font-medium transition-colors ${
+                          role === opt.value
+                            ? "bg-[#0A192F] text-white border-[#0A192F]"
+                            : "bg-white text-slate-600 border-slate-300 hover:border-[#0A192F]"
+                        }`}
+                        data-testid={`role-${opt.value}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+                <div>
+                  <Label htmlFor="company" className="text-xs uppercase tracking-wider text-slate-500 font-medium">
+                    Company Name
+                  </Label>
+                  <div className="mt-1.5 relative">
+                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input
+                      id="company"
+                      data-testid="company-input"
+                      type="text"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      className="pl-10 h-12 bg-white border-slate-300 focus:ring-gold focus:border-gold"
+                      placeholder="Your Company Ltd"
+                      required={!isLogin}
+                    />
+                  </div>
+                </div>
+              </>
             )}
 
             <div>
