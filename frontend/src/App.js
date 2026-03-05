@@ -1,0 +1,210 @@
+import { useState, useEffect, createContext, useContext } from "react";
+import "@/App.css";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import axios from "axios";
+import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
+
+// Pages
+import LoginPage from "@/pages/LoginPage";
+import AdminDashboard from "@/pages/AdminDashboard";
+import OpportunityDetail from "@/pages/OpportunityDetail";
+import ExporterDashboard from "@/pages/ExporterDashboard";
+import PipelineView from "@/pages/PipelineView";
+import CreateOpportunity from "@/pages/CreateOpportunity";
+import ExporterProfile from "@/pages/ExporterProfile";
+import ExporterFinancing from "@/pages/ExporterFinancing";
+import ExporterSubscription from "@/pages/ExporterSubscription";
+import AdminFinanceRequests from "@/pages/AdminFinanceRequests";
+import AdminRevenue from "@/pages/AdminRevenue";
+// New pages
+import BuyerDashboard from "@/pages/BuyerDashboard";
+import BuyerPostRFQ from "@/pages/BuyerPostRFQ";
+import BuyerProfile from "@/pages/BuyerProfile";
+import DealRoom from "@/pages/DealRoom";
+import MarketIntelligence from "@/pages/MarketIntelligence";
+import NBFCOfferComparison from "@/pages/NBFCOfferComparison";
+import DocumentIntelligence from "@/pages/DocumentIntelligence";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+export const API = `${BACKEND_URL}/api`;
+
+// Auth Context
+const AuthContext = createContext(null);
+
+export const useAuth = () => useContext(AuthContext);
+
+const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem("token"));
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const verifyToken = async () => {
+      if (token) {
+        try {
+          const res = await axios.get(`${API}/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setUser(res.data);
+        } catch (e) {
+          localStorage.removeItem("token");
+          setToken(null);
+          setUser(null);
+        }
+      }
+      setLoading(false);
+    };
+    verifyToken();
+  }, [token]);
+
+  const login = async (email, password) => {
+    const res = await axios.post(`${API}/auth/login`, { email, password });
+    localStorage.setItem("token", res.data.access_token);
+    setToken(res.data.access_token);
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
+  const register = async (email, password, companyName, role) => {
+    const res = await axios.post(`${API}/auth/register`, {
+      email,
+      password,
+      company_name: companyName,
+      role
+    });
+    localStorage.setItem("token", res.data.access_token);
+    setToken(res.data.access_token);
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
+  const logout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setUser(null);
+  };
+
+  // Create axios instance with interceptor for auth
+  const authAxios = axios.create({
+    baseURL: API
+  });
+
+  // Add auth header to all requests
+  authAxios.interceptors.request.use((config) => {
+    const storedToken = localStorage.getItem("token");
+    if (storedToken) {
+      config.headers.Authorization = `Bearer ${storedToken}`;
+    }
+    return config;
+  });
+
+  // Handle 401 errors
+  authAxios.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response?.status === 401) {
+        localStorage.removeItem("token");
+        setToken(null);
+        setUser(null);
+      }
+      return Promise.reject(error);
+    }
+  );
+
+  return (
+    <AuthContext.Provider value={{ user, token, login, register, logout, loading, authAxios }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+// Protected Route
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-offwhite">
+        <div className="text-slate-500">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    const home = user.role === "admin" ? "/admin" : user.role === "buyer" ? "/buyer" : "/exporter";
+    return <Navigate to={home} replace />;
+  }
+
+  return children;
+};
+
+function AppRoutes() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-offwhite">
+        <div className="text-slate-500">Loading...</div>
+      </div>
+    );
+  }
+
+  const homeRoute = user
+    ? (user.role === "admin" ? "/admin" : user.role === "buyer" ? "/buyer" : "/exporter")
+    : "/login";
+
+  return (
+    <Routes>
+      <Route path="/login" element={user ? <Navigate to={homeRoute} /> : <LoginPage />} />
+
+      {/* Admin Routes */}
+      <Route path="/admin" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/admin/opportunity/:id" element={<ProtectedRoute allowedRoles={["admin"]}><OpportunityDetail /></ProtectedRoute>} />
+      <Route path="/admin/create-opportunity" element={<ProtectedRoute allowedRoles={["admin"]}><CreateOpportunity /></ProtectedRoute>} />
+      <Route path="/admin/pipeline" element={<ProtectedRoute allowedRoles={["admin"]}><PipelineView /></ProtectedRoute>} />
+      <Route path="/admin/finance-requests" element={<ProtectedRoute allowedRoles={["admin"]}><AdminFinanceRequests /></ProtectedRoute>} />
+      <Route path="/admin/revenue" element={<ProtectedRoute allowedRoles={["admin"]}><AdminRevenue /></ProtectedRoute>} />
+      <Route path="/admin/finance-requests/:requestId/offers" element={<ProtectedRoute allowedRoles={["admin"]}><NBFCOfferComparison /></ProtectedRoute>} />
+
+      {/* Exporter Routes */}
+      <Route path="/exporter" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterDashboard /></ProtectedRoute>} />
+      <Route path="/exporter/profile" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterProfile /></ProtectedRoute>} />
+      <Route path="/exporter/financing" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterFinancing /></ProtectedRoute>} />
+      <Route path="/exporter/subscription" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterSubscription /></ProtectedRoute>} />
+      <Route path="/exporter/opportunity/:id" element={<ProtectedRoute allowedRoles={["exporter"]}><OpportunityDetail /></ProtectedRoute>} />
+      <Route path="/exporter/finance-requests/:requestId/offers" element={<ProtectedRoute allowedRoles={["exporter"]}><NBFCOfferComparison /></ProtectedRoute>} />
+
+      {/* Buyer Routes */}
+      <Route path="/buyer" element={<ProtectedRoute allowedRoles={["buyer"]}><BuyerDashboard /></ProtectedRoute>} />
+      <Route path="/buyer/post-rfq" element={<ProtectedRoute allowedRoles={["buyer"]}><BuyerPostRFQ /></ProtectedRoute>} />
+      <Route path="/buyer/profile" element={<ProtectedRoute allowedRoles={["buyer"]}><BuyerProfile /></ProtectedRoute>} />
+
+      {/* Shared Routes */}
+      <Route path="/deals/:dealId/room" element={<ProtectedRoute allowedRoles={["admin", "exporter", "buyer"]}><DealRoom /></ProtectedRoute>} />
+      <Route path="/market-intelligence" element={<ProtectedRoute allowedRoles={["admin", "exporter", "buyer"]}><MarketIntelligence /></ProtectedRoute>} />
+      <Route path="/document-intelligence" element={<ProtectedRoute allowedRoles={["admin", "exporter"]}><DocumentIntelligence /></ProtectedRoute>} />
+
+      {/* Default redirect */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Toaster position="top-right" richColors />
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
+
+export default App;
