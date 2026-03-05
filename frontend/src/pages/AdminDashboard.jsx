@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, Plus, FileText, Users, TrendingUp, GitBranch, RefreshCw, ShoppingBag, Building2 } from "lucide-react";
+import { Search, Plus, FileText, Users, TrendingUp, GitBranch, RefreshCw, ShoppingBag, Building2, Wallet, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SECTORS, REGIONS } from "@/data/tradeData";
 
@@ -21,6 +21,7 @@ export default function AdminDashboard() {
   const [buyers, setBuyers] = useState([]);
   const [exporters, setExporters] = useState([]);
   const [stats, setStats] = useState(null);
+  const [pendingFinanceRequests, setPendingFinanceRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [usersLoading, setUsersLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -32,12 +33,14 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [oppRes, statsRes] = await Promise.all([
+      const [oppRes, statsRes, financeRes] = await Promise.all([
         authAxios.get("/opportunities"),
-        authAxios.get("/stats")
+        authAxios.get("/stats"),
+        authAxios.get("/finance-requests?status=requested").catch(() => ({ data: [] }))
       ]);
       setOpportunities(oppRes.data);
       setStats(statsRes.data);
+      setPendingFinanceRequests(financeRes.data);
     } catch (e) {
       toast.error("Failed to load data");
     } finally {
@@ -123,6 +126,32 @@ export default function AdminDashboard() {
         </header>
 
         <div className="p-8">
+          {/* NBFC Finance Requests Alert */}
+          {pendingFinanceRequests.length > 0 && (
+            <div className="premium-card p-4 rounded-sm mb-6 border-l-4 border-l-amber-500 bg-amber-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-semibold text-slate-900">
+                      {pendingFinanceRequests.length} New NBFC Financing Request{pendingFinanceRequests.length > 1 ? "s" : ""} Pending
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      Exporters are waiting for their financing requests to be reviewed and submitted to NBFCs.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => navigate("/admin/finance-requests")}
+                  className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2 flex-shrink-0"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Review Requests
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Stats Grid */}
           {stats && (
             <div className="grid grid-cols-5 gap-4 mb-8">

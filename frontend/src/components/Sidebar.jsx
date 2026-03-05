@@ -1,5 +1,6 @@
 import { useAuth } from "@/App";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   FileText,
@@ -45,11 +46,20 @@ const BUYER_LINKS = [
 ];
 
 export default function Sidebar() {
-  const { user, logout } = useAuth();
+  const { user, logout, authAxios } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [pendingFinanceCount, setPendingFinanceCount] = useState(0);
 
   const role = user?.role;
+
+  useEffect(() => {
+    if (role === "admin" && authAxios) {
+      authAxios.get("/finance-requests?status=requested")
+        .then(res => setPendingFinanceCount(res.data.length))
+        .catch(() => {});
+    }
+  }, [role, authAxios]);
   const links =
     role === "admin" ? ADMIN_LINKS :
     role === "buyer" ? BUYER_LINKS :
@@ -83,7 +93,7 @@ export default function Sidebar() {
           </div>
           <div>
             <h1 className="font-display text-lg font-semibold text-white">TradeNexus</h1>
-            <p className="text-xs text-slate-400 uppercase tracking-wider">{portalLabel}</p>
+            <p className="text-xs text-white/60 uppercase tracking-wider">{portalLabel}</p>
           </div>
         </div>
       </div>
@@ -99,11 +109,16 @@ export default function Sidebar() {
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-sm transition-colors text-sm ${
                   isActive(link.path)
                     ? "bg-white/10 text-white"
-                    : "text-slate-300 hover:bg-white/5 hover:text-white"
+                    : "text-white/75 hover:bg-white/5 hover:text-white"
                 }`}
               >
                 <link.icon className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
-                <span className="font-medium">{link.label}</span>
+                <span className="font-medium flex-1 text-left">{link.label}</span>
+                {link.label === "Finance Requests" && pendingFinanceCount > 0 && (
+                  <span className="bg-amber-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0">
+                    {pendingFinanceCount > 9 ? "9+" : pendingFinanceCount}
+                  </span>
+                )}
               </button>
             </li>
           ))}
@@ -114,17 +129,17 @@ export default function Sidebar() {
       <div className="p-4 border-t border-slate-700">
         <div className="flex items-center gap-3 px-4 py-3 mb-2">
           <div className="w-8 h-8 bg-slate-600 rounded-full flex items-center justify-center flex-shrink-0">
-            <Building2 className="w-4 h-4 text-slate-300" />
+            <Building2 className="w-4 h-4 text-white/60" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white truncate">{user?.company_name}</p>
-            <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+            <p className="text-xs text-white/50 truncate">{user?.email}</p>
           </div>
         </div>
         <button
           onClick={handleLogout}
           data-testid="logout-btn"
-          className="w-full flex items-center gap-3 px-4 py-2.5 text-slate-300 hover:bg-white/5 hover:text-white rounded-sm transition-colors text-sm"
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-white/75 hover:bg-white/5 hover:text-white rounded-sm transition-colors text-sm"
         >
           <LogOut className="w-4 h-4" strokeWidth={1.5} />
           <span className="font-medium">Sign Out</span>

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, FileText, CheckCircle, Clock, RefreshCw, MessageSquare } from "lucide-react";
+import { Search, FileText, CheckCircle, Clock, RefreshCw, MessageSquare, Wallet, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const SECTORS = ["Agriculture", "Marine / Frozen Foods", "Pharma", "Special Chemicals", "Value-Added Agri Products"];
@@ -22,18 +22,21 @@ export default function ExporterDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sectorFilter, setSectorFilter] = useState("all");
   const [hasProfile, setHasProfile] = useState(false);
+  const [financeRequests, setFinanceRequests] = useState([]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [oppRes, interestsRes, dealsRes] = await Promise.all([
+      const [oppRes, interestsRes, dealsRes, financeRes] = await Promise.all([
         authAxios.get("/opportunities?status=Active"),
         authAxios.get("/my-interests"),
-        authAxios.get("/deals")
+        authAxios.get("/deals"),
+        authAxios.get("/finance-requests").catch(() => ({ data: [] }))
       ]);
       setOpportunities(oppRes.data);
       setMyInterests(interestsRes.data);
       setMyDeals(dealsRes.data);
+      setFinanceRequests(financeRes.data);
 
       // Check if profile exists
       try {
@@ -142,6 +145,40 @@ export default function ExporterDashboard() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* NBFC / Trade Financing Banner */}
+          <div className="premium-card p-6 rounded-sm mb-6 border-l-4 border-l-[#0A192F] bg-gradient-to-r from-slate-50 to-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-[#0A192F]/10 rounded-sm flex items-center justify-center">
+                  <Wallet className="w-6 h-6 text-[#0A192F]" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">NBFC Trade Financing</h3>
+                  <p className="text-sm text-slate-500">
+                    {financeRequests.length === 0
+                      ? "Get working capital for your trade deals — request financing from NBFCs"
+                      : `${financeRequests.length} financing request${financeRequests.length > 1 ? "s" : ""} · ${financeRequests.filter(r => r.financing_status === "nbfc_offer_received").length} offer${financeRequests.filter(r => r.financing_status === "nbfc_offer_received").length !== 1 ? "s" : ""} received`}
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => navigate("/exporter/financing")}
+                className="bg-[#0A192F] hover:bg-[#1E293B] text-white flex items-center gap-2"
+                data-testid="go-to-financing-btn"
+              >
+                {financeRequests.length === 0 ? "Request Financing" : "Manage Financing"}
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+            {financeRequests.filter(r => r.financing_status === "nbfc_offer_received").length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-200">
+                <p className="text-xs text-emerald-700 font-medium">
+                  You have pending NBFC offers waiting for your acceptance. Go to Trade Financing to review and accept.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Filters */}
