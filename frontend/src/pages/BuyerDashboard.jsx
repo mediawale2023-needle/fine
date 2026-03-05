@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import {
   PlusCircle, Package, MapPin, Calendar, RefreshCw,
-  ChevronRight, ClipboardList, CheckCircle, Clock
+  ClipboardList, CheckCircle, Clock
 } from "lucide-react";
 
 const STATUS_COLORS = {
@@ -139,8 +139,7 @@ export default function BuyerDashboard() {
                 {rfqs.map(rfq => (
                   <div
                     key={rfq.id}
-                    className="px-6 py-4 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition-colors"
-                    onClick={() => navigate(`/buyer/rfq/${rfq.id}`)}
+                    className="px-6 py-4 flex items-center justify-between"
                     data-testid={`rfq-row-${rfq.id}`}
                   >
                     <div className="flex items-center gap-4">
@@ -170,7 +169,6 @@ export default function BuyerDashboard() {
                       <Badge className={`text-xs ${STATUS_COLORS[rfq.status] || "bg-slate-100"}`}>
                         {rfq.status}
                       </Badge>
-                      <ChevronRight className="w-4 h-4 text-slate-300" />
                     </div>
                   </div>
                 ))}

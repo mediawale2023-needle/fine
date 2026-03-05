@@ -100,8 +100,9 @@ export default function OpportunityDetail() {
       toast.success("Deal created! Opening Deal Room...");
       if (res.data?.id) {
         setTimeout(() => navigate(`/deals/${res.data.id}/room`), 800);
+      } else {
+        navigate("/admin/pipeline");
       }
-      navigate("/admin/pipeline");
     } catch (e) {
       toast.error("Failed to create deal");
     }

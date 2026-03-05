@@ -2510,7 +2510,17 @@ async def root():
 
 @api_router.get("/health")
 async def health():
-    return {"status": "healthy"}
+    try:
+        await db.command("ping")
+        db_status = "connected"
+    except Exception:
+        db_status = "disconnected"
+    return {
+        "status": "healthy",
+        "db": db_status,
+        "version": "1.0.0",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 # Include router
 app.include_router(api_router)
@@ -2523,6 +2533,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_event():
+    """Create indexes and seed demo data on startup."""
+    logger.info("TradeNexus AI starting up...")
+    try:
+        # Create indexes for performance
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("role")
+        await db.opportunities.create_index("status")
+        await db.opportunities.create_index("sector")
+        await db.opportunities.create_index("region")
+        await db.opportunities.create_index([("created_at", -1)])
+        await db.deals.create_index("opportunity_id")
+        await db.deals.create_index("exporter_user_id")
+        await db.deals.create_index("stage")
+        await db.deals.create_index([("created_at", -1)])
+        await db.messages.create_index("deal_id")
+        await db.messages.create_index([("deal_id", 1), ("created_at", 1)])
+        await db.finance_requests.create_index("exporter_id")
+        await db.finance_requests.create_index("financing_status")
+        await db.buyer_rfqs.create_index("buyer_user_id")
+        await db.buyer_rfqs.create_index("status")
+        await db.revenue_records.create_index([("created_at", -1)])
+        await db.exporter_profiles.create_index("user_id", unique=True)
+        logger.info("MongoDB indexes created successfully")
+    except Exception as e:
+        logger.warning(f"Index creation skipped (may already exist): {e}")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+    logger.info("TradeNexus AI shut down cleanly")

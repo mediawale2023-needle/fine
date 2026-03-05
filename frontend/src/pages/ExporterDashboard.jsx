@@ -203,9 +203,9 @@ export default function ExporterDashboard() {
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
                       <th className="text-left px-6 py-4 text-xs uppercase tracking-wider text-slate-500 font-medium">Product</th>
-                      <th className="text-left px-6 py-4 text-xs uppercase tracking-wider text-slate-500 font-medium">Actions</th>
                       <th className="text-left px-6 py-4 text-xs uppercase tracking-wider text-slate-500 font-medium">Stage</th>
                       <th className="text-left px-6 py-4 text-xs uppercase tracking-wider text-slate-500 font-medium">Updated</th>
+                      <th className="text-left px-6 py-4 text-xs uppercase tracking-wider text-slate-500 font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -223,7 +223,7 @@ export default function ExporterDashboard() {
                         <td className="px-6 py-4">
                           <button
                             onClick={() => navigate(`/deals/${deal.id}/room`)}
-                            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-[#0A192F] transition-colors"
+                            className="flex items-center gap-1.5 text-xs text-[#0A192F] hover:text-[#C5A059] font-medium transition-colors"
                             data-testid={`deal-room-btn-${deal.id}`}
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
