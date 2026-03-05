@@ -1,0 +1,24 @@
+# TradeNexus AI — Railway/Nixpacks build configuration
+# Builds the React frontend first, then installs Python deps and starts the API.
+
+providers = ["python"]
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "python311"]
+
+[phases.install]
+cmds = [
+  # Python dependencies
+  "pip install -r backend/requirements.txt",
+  # Node dependencies for frontend build
+  "cd frontend && npm install --legacy-peer-deps"
+]
+
+[phases.build]
+cmds = [
+  # Build React app with relative API URL so it hits the same Railway domain
+  "cd frontend && REACT_APP_BACKEND_URL='' npm run build"
+]
+
+[start]
+cmd = "uvicorn backend.server:app --host 0.0.0.0 --port $PORT"

@@ -1,5 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -2565,3 +2567,31 @@ async def startup_event():
 async def shutdown_db_client():
     client.close()
     logger.info("TradeNexus AI shut down cleanly")
+
+# ── Serve React SPA ───────────────────────────────────────────────────────────
+# When deployed on Railway, the frontend build is placed at:
+#   /app/frontend/build   (set FRONTEND_BUILD_DIR to override)
+_FRONTEND_BUILD = Path(
+    os.environ.get("FRONTEND_BUILD_DIR", ROOT_DIR.parent / "frontend" / "build")
+)
+
+if _FRONTEND_BUILD.exists():
+    # Serve hashed static assets (JS/CSS bundles)
+    app.mount(
+        "/static",
+        StaticFiles(directory=_FRONTEND_BUILD / "static"),
+        name="react-static",
+    )
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        """Serve the React SPA for any non-API path."""
+        candidate = _FRONTEND_BUILD / full_path
+        if candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_FRONTEND_BUILD / "index.html")
+else:
+    logger.info(
+        f"Frontend build not found at {_FRONTEND_BUILD}. "
+        "API-only mode — set FRONTEND_BUILD_DIR or run `yarn build` in frontend/."
+    )
