@@ -10,24 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Send, X, Sparkles } from "lucide-react";
-
-const SECTORS = [
-  "Agriculture",
-  "Marine / Frozen Foods",
-  "Pharma",
-  "Special Chemicals",
-  "Value-Added Agri Products",
-];
-
-const REGIONS = ["Africa", "Middle East", "Europe"];
-
-const CERTIFICATIONS_BY_SECTOR = {
-  Agriculture: ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal"],
-  "Marine / Frozen Foods": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal"],
-  Pharma: ["WHO-GMP", "USFDA", "EU-GMP", "ISO 9001"],
-  "Special Chemicals": ["ISO 9001", "ISO 14001", "REACH", "MSDS"],
-  "Value-Added Agri Products": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal"],
-};
+import { SECTORS, REGIONS, HS_CODES_BY_SECTOR, CERTIFICATIONS_BY_SECTOR } from "@/data/tradeData";
 
 export default function BuyerPostRFQ() {
   const { authAxios } = useAuth();
@@ -47,6 +30,7 @@ export default function BuyerPostRFQ() {
   });
 
   const availableCerts = CERTIFICATIONS_BY_SECTOR[form.sector] || [];
+  const availableHsCodes = HS_CODES_BY_SECTOR[form.sector] || [];
 
   const toggleCert = (cert) => {
     setForm(f => ({
@@ -132,14 +116,30 @@ export default function BuyerPostRFQ() {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="hs_code">HS Code (optional)</Label>
-                  <Input
-                    id="hs_code"
-                    placeholder="e.g. 1006.30"
-                    value={form.hs_code}
-                    onChange={e => setForm(f => ({ ...f, hs_code: e.target.value }))}
-                    className="mt-1"
-                  />
+                  <Label>HS Code (optional)</Label>
+                  {availableHsCodes.length > 0 ? (
+                    <Select
+                      value={form.hs_code}
+                      onValueChange={v => setForm(f => ({ ...f, hs_code: v }))}
+                    >
+                      <SelectTrigger className="mt-1 font-mono">
+                        <SelectValue placeholder="Select HS code" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableHsCodes.map((item) => (
+                          <SelectItem key={item.code} value={item.code} className="font-mono">
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      placeholder="Select a sector first"
+                      className="mt-1 font-mono"
+                      disabled
+                    />
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="quantity">Quantity Required *</Label>

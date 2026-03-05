@@ -8,10 +8,25 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Building2, Save, CheckCircle } from "lucide-react";
+import { SECTORS } from "@/data/tradeData";
 
-const SECTORS = ["Agriculture", "Marine / Frozen Foods", "Pharma", "Special Chemicals", "Value-Added Agri Products"];
-const ALL_CERTIFICATIONS = ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal", "WHO-GMP", "USFDA", "EU-GMP", "ISO 9001", "ISO 14001", "REACH", "MSDS"];
-const SAMPLE_COUNTRIES = ["Nigeria", "Kenya", "South Africa", "UAE", "Saudi Arabia", "Qatar", "Oman", "Germany", "France", "UK", "Netherlands", "Spain", "Italy", "Morocco", "Egypt"];
+const ALL_CERTIFICATIONS = [
+  "FSSAI", "ISO 22000", "HACCP", "BRC", "Halal", "Organic", "GlobalG.A.P.", "MSC", "ASC",
+  "WHO-GMP", "USFDA", "EU-GMP", "ISO 9001", "ISO 13485", "GLP",
+  "ISO 14001", "REACH", "MSDS", "ADR", "ISO 45001",
+  "OEKO-TEX", "GOTS", "SA8000", "BCI",
+  "CE Mark", "RoHS", "FCC", "BIS",
+  "IATF 16949", "AIS", "Kosher", "FDA",
+  "BIS Hallmark", "Kimberley Process", "RJC",
+  "LWG", "FSC", "PEFC", "Fair Trade", "EPCH",
+];
+const SAMPLE_COUNTRIES = [
+  "Nigeria", "Kenya", "South Africa", "Ghana", "Ethiopia", "Tanzania",
+  "UAE", "Saudi Arabia", "Qatar", "Oman", "Kuwait", "Bahrain",
+  "Germany", "France", "UK", "Netherlands", "Spain", "Italy", "Belgium", "Poland",
+  "USA", "Canada", "Brazil", "Australia", "Japan", "Singapore", "Malaysia",
+  "Morocco", "Egypt", "Bangladesh", "Sri Lanka",
+];
 
 export default function ExporterProfile() {
   const { authAxios, user } = useAuth();

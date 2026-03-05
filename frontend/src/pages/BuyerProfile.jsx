@@ -7,14 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
-
-const SECTORS = [
-  "Agriculture",
-  "Marine / Frozen Foods",
-  "Pharma",
-  "Special Chemicals",
-  "Value-Added Agri Products",
-];
+import { SECTORS } from "@/data/tradeData";
 
 const INDUSTRIES = [
   "Food & Beverage",

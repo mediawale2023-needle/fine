@@ -10,17 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { ArrowLeft, Sparkles, Loader2, FileText } from "lucide-react";
+import { SECTORS, REGIONS, HS_CODES_BY_SECTOR, CERTIFICATIONS_BY_SECTOR } from "@/data/tradeData";
 
-const SECTORS = ["Agriculture", "Marine / Frozen Foods", "Pharma", "Special Chemicals", "Value-Added Agri Products"];
-const REGIONS = ["Africa", "Middle East", "Europe"];
 const ENGAGEMENT_MODES = ["Introduction-only", "Introduction + Negotiation Support"];
-const CERTIFICATIONS = {
-  "Agriculture": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal"],
-  "Marine / Frozen Foods": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal"],
-  "Pharma": ["WHO-GMP", "USFDA", "EU-GMP", "ISO 9001"],
-  "Special Chemicals": ["ISO 9001", "ISO 14001", "REACH", "MSDS"],
-  "Value-Added Agri Products": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal"]
-};
 
 export default function CreateOpportunity() {
   const { authAxios } = useAuth();
@@ -101,7 +93,8 @@ export default function CreateOpportunity() {
     }));
   };
 
-  const availableCerts = formData.sector ? CERTIFICATIONS[formData.sector] || [] : [];
+  const availableCerts = formData.sector ? CERTIFICATIONS_BY_SECTOR[formData.sector] || [] : [];
+  const availableHsCodes = formData.sector ? HS_CODES_BY_SECTOR[formData.sector] || [] : [];
 
   return (
     <div className="app-container">
@@ -253,13 +246,32 @@ export default function CreateOpportunity() {
 
                 <div>
                   <Label className="text-xs uppercase tracking-wider text-slate-500">HS Code</Label>
-                  <Input
-                    value={formData.hs_code}
-                    onChange={(e) => setFormData({ ...formData, hs_code: e.target.value })}
-                    data-testid="hscode-input"
-                    className="mt-1.5 font-mono"
-                    placeholder="e.g., 1006.30"
-                  />
+                  {availableHsCodes.length > 0 ? (
+                    <Select
+                      value={formData.hs_code}
+                      onValueChange={(v) => setFormData({ ...formData, hs_code: v })}
+                    >
+                      <SelectTrigger className="mt-1.5 font-mono" data-testid="hscode-input">
+                        <SelectValue placeholder="Select HS code" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableHsCodes.map((item) => (
+                          <SelectItem key={item.code} value={item.code} className="font-mono">
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={formData.hs_code}
+                      onChange={(e) => setFormData({ ...formData, hs_code: e.target.value })}
+                      data-testid="hscode-input"
+                      className="mt-1.5 font-mono"
+                      placeholder="Select a sector first"
+                      disabled
+                    />
+                  )}
                 </div>
 
                 <div>

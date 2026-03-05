@@ -213,7 +213,7 @@ export default function LoginPage() {
               className="text-sm text-teal-deep hover:text-navy transition-colors"
               data-testid="toggle-auth-mode"
             >
-              {isLogin ? "New exporter? Create an account" : "Already have an account? Sign in"}
+              {isLogin ? "New here? Create an account" : "Already have an account? Sign in"}
             </button>
           </div>
 
