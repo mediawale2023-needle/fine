@@ -44,8 +44,229 @@ logger = logging.getLogger(__name__)
 
 # ===================== MODELS =====================
 
-SECTORS = ["Agriculture", "Marine / Frozen Foods", "Pharma", "Special Chemicals", "Value-Added Agri Products"]
-REGIONS = ["Africa", "Middle East", "Europe"]
+SECTORS = [
+    "Agriculture",
+    "Marine / Frozen Foods",
+    "Pharma & Life Sciences",
+    "Chemicals & Petrochemicals",
+    "Textiles & Apparel",
+    "Engineering & Machinery",
+    "Electronics & Technology",
+    "Auto Components",
+    "Food & Beverages",
+    "Gems & Jewellery",
+    "Leather & Footwear",
+    "Plastics & Rubber",
+    "Paper & Wood Products",
+    "Construction Materials",
+    "Handicrafts & Artisans",
+    "Special Chemicals",
+    "Value-Added Agri Products",
+]
+REGIONS = ["Africa", "Middle East", "Europe", "Asia Pacific", "North America", "South America", "Central Asia"]
+
+HS_CODES_BY_SECTOR = {
+    "Agriculture": [
+        {"code": "1001", "label": "1001 - Wheat"},
+        {"code": "1006", "label": "1006 - Rice"},
+        {"code": "1201", "label": "1201 - Soybeans"},
+        {"code": "0901", "label": "0901 - Coffee"},
+        {"code": "0902", "label": "0902 - Tea"},
+        {"code": "0701", "label": "0701 - Potatoes"},
+        {"code": "0803", "label": "0803 - Bananas"},
+        {"code": "0806", "label": "0806 - Grapes"},
+        {"code": "1005", "label": "1005 - Maize (Corn)"},
+        {"code": "1507", "label": "1507 - Soybean Oil"},
+        {"code": "1701", "label": "1701 - Cane Sugar"},
+        {"code": "2401", "label": "2401 - Tobacco"},
+        {"code": "0401", "label": "0401 - Milk & Cream"},
+    ],
+    "Marine / Frozen Foods": [
+        {"code": "0302", "label": "0302 - Fresh Fish"},
+        {"code": "0303", "label": "0303 - Frozen Fish"},
+        {"code": "0304", "label": "0304 - Fish Fillets"},
+        {"code": "0305", "label": "0305 - Dried/Salted Fish"},
+        {"code": "0306", "label": "0306 - Crustaceans (Shrimp/Crab)"},
+        {"code": "0307", "label": "0307 - Molluscs (Squid/Octopus)"},
+        {"code": "1604", "label": "1604 - Prepared/Preserved Fish"},
+        {"code": "1605", "label": "1605 - Prepared Crustaceans"},
+    ],
+    "Pharma & Life Sciences": [
+        {"code": "3004", "label": "3004 - Medicaments (Packaged)"},
+        {"code": "3003", "label": "3003 - Medicaments (Mixed)"},
+        {"code": "3002", "label": "3002 - Blood / Vaccines"},
+        {"code": "2941", "label": "2941 - Antibiotics"},
+        {"code": "2936", "label": "2936 - Vitamins"},
+        {"code": "2924", "label": "2924 - API (Paracetamol etc.)"},
+        {"code": "3005", "label": "3005 - Medical Dressings"},
+        {"code": "3006", "label": "3006 - Pharmaceutical Goods"},
+        {"code": "9018", "label": "9018 - Medical Instruments"},
+    ],
+    "Chemicals & Petrochemicals": [
+        {"code": "2710", "label": "2710 - Petroleum Oils"},
+        {"code": "2709", "label": "2709 - Crude Petroleum"},
+        {"code": "2814", "label": "2814 - Ammonia"},
+        {"code": "2815", "label": "2815 - Sodium Hydroxide (NaOH)"},
+        {"code": "2901", "label": "2901 - Acyclic Hydrocarbons"},
+        {"code": "2902", "label": "2902 - Cyclic Hydrocarbons"},
+        {"code": "3105", "label": "3105 - Fertilizers (NPK)"},
+        {"code": "3901", "label": "3901 - Polyethylene"},
+        {"code": "3902", "label": "3902 - Polypropylene"},
+        {"code": "3904", "label": "3904 - PVC"},
+        {"code": "2804", "label": "2804 - Hydrogen / Noble Gases"},
+    ],
+    "Special Chemicals": [
+        {"code": "2801", "label": "2801 - Halogens"},
+        {"code": "2807", "label": "2807 - Sulphuric Acid"},
+        {"code": "2811", "label": "2811 - Other Inorganic Acids"},
+        {"code": "2903", "label": "2903 - Halogenated Hydrocarbons"},
+        {"code": "3204", "label": "3204 - Synthetic Dyes"},
+        {"code": "3205", "label": "3205 - Colour Lakes"},
+        {"code": "3206", "label": "3206 - Pigments / Colouring"},
+        {"code": "3402", "label": "3402 - Surface-Active Agents"},
+        {"code": "3808", "label": "3808 - Pesticides"},
+    ],
+    "Textiles & Apparel": [
+        {"code": "5201", "label": "5201 - Cotton (not carded)"},
+        {"code": "5208", "label": "5208 - Woven Cotton Fabrics"},
+        {"code": "5407", "label": "5407 - Woven Synthetic Yarn Fabrics"},
+        {"code": "6109", "label": "6109 - T-Shirts / Vests"},
+        {"code": "6110", "label": "6110 - Jerseys / Sweaters"},
+        {"code": "6203", "label": "6203 - Men's Suits / Trousers"},
+        {"code": "6204", "label": "6204 - Women's Suits / Dresses"},
+        {"code": "6302", "label": "6302 - Bed Linen"},
+        {"code": "6304", "label": "6304 - Furnishing Articles"},
+        {"code": "6402", "label": "6402 - Footwear (Rubber/Plastic)"},
+    ],
+    "Engineering & Machinery": [
+        {"code": "8408", "label": "8408 - Diesel Engines"},
+        {"code": "8413", "label": "8413 - Pumps for Liquids"},
+        {"code": "8414", "label": "8414 - Air / Vacuum Pumps"},
+        {"code": "8419", "label": "8419 - Heat Treatment Machinery"},
+        {"code": "8421", "label": "8421 - Centrifuges / Filters"},
+        {"code": "8428", "label": "8428 - Lifting / Loading Machinery"},
+        {"code": "8443", "label": "8443 - Printing Machinery"},
+        {"code": "8477", "label": "8477 - Rubber/Plastics Machinery"},
+        {"code": "8501", "label": "8501 - Electric Motors"},
+        {"code": "8502", "label": "8502 - Electric Generators"},
+    ],
+    "Electronics & Technology": [
+        {"code": "8517", "label": "8517 - Telephones / Smartphones"},
+        {"code": "8471", "label": "8471 - Computers / Laptops"},
+        {"code": "8504", "label": "8504 - Electrical Transformers"},
+        {"code": "8523", "label": "8523 - Storage Media"},
+        {"code": "8525", "label": "8525 - Transmission Apparatus"},
+        {"code": "8528", "label": "8528 - Monitors / Projectors"},
+        {"code": "8541", "label": "8541 - Diodes / Transistors"},
+        {"code": "8542", "label": "8542 - Electronic Integrated Circuits"},
+        {"code": "8544", "label": "8544 - Insulated Wire / Cable"},
+        {"code": "8534", "label": "8534 - Printed Circuit Boards"},
+    ],
+    "Auto Components": [
+        {"code": "8708", "label": "8708 - Car Parts & Accessories"},
+        {"code": "8706", "label": "8706 - Chassis for Vehicles"},
+        {"code": "8483", "label": "8483 - Transmission Shafts / Gears"},
+        {"code": "8507", "label": "8507 - Electric Accumulators / Batteries"},
+        {"code": "4011", "label": "4011 - New Pneumatic Tyres"},
+        {"code": "8409", "label": "8409 - Engine Parts"},
+        {"code": "8407", "label": "8407 - Spark-Ignition Engines"},
+        {"code": "8714", "label": "8714 - Motorcycle Parts"},
+        {"code": "8716", "label": "8716 - Trailers / Semi-Trailers"},
+    ],
+    "Food & Beverages": [
+        {"code": "1602", "label": "1602 - Prepared / Preserved Meat"},
+        {"code": "1704", "label": "1704 - Sugar Confectionery"},
+        {"code": "1806", "label": "1806 - Chocolate Products"},
+        {"code": "1902", "label": "1902 - Pasta / Noodles"},
+        {"code": "1905", "label": "1905 - Bread / Pastries / Biscuits"},
+        {"code": "2009", "label": "2009 - Fruit / Vegetable Juices"},
+        {"code": "2106", "label": "2106 - Food Preparations"},
+        {"code": "2202", "label": "2202 - Non-Alcoholic Beverages"},
+        {"code": "2203", "label": "2203 - Beer"},
+        {"code": "2204", "label": "2204 - Wine"},
+        {"code": "2208", "label": "2208 - Spirits / Liquors"},
+        {"code": "2101", "label": "2101 - Coffee / Tea Extracts"},
+    ],
+    "Value-Added Agri Products": [
+        {"code": "0712", "label": "0712 - Dried Vegetables"},
+        {"code": "0904", "label": "0904 - Pepper / Spices"},
+        {"code": "0910", "label": "0910 - Ginger / Turmeric / Spices"},
+        {"code": "1101", "label": "1101 - Wheat / Meslin Flour"},
+        {"code": "1102", "label": "1102 - Cereal Flours (Non-Wheat)"},
+        {"code": "1108", "label": "1108 - Starch"},
+        {"code": "1515", "label": "1515 - Other Vegetable Oils"},
+        {"code": "2001", "label": "2001 - Vegetables in Vinegar"},
+        {"code": "2002", "label": "2002 - Tomatoes Prepared"},
+        {"code": "2008", "label": "2008 - Other Prepared Fruits / Nuts"},
+        {"code": "1209", "label": "1209 - Seeds for Sowing"},
+    ],
+    "Gems & Jewellery": [
+        {"code": "7102", "label": "7102 - Diamonds"},
+        {"code": "7103", "label": "7103 - Precious / Semi-Precious Stones"},
+        {"code": "7106", "label": "7106 - Silver"},
+        {"code": "7108", "label": "7108 - Gold"},
+        {"code": "7110", "label": "7110 - Platinum"},
+        {"code": "7113", "label": "7113 - Articles of Jewellery"},
+        {"code": "7114", "label": "7114 - Articles of Goldsmiths"},
+        {"code": "7117", "label": "7117 - Imitation Jewellery"},
+        {"code": "7101", "label": "7101 - Pearls"},
+    ],
+    "Leather & Footwear": [
+        {"code": "4104", "label": "4104 - Tanned Bovine Leather"},
+        {"code": "4107", "label": "4107 - Full-Grain Leather"},
+        {"code": "6403", "label": "6403 - Footwear with Leather Uppers"},
+        {"code": "6404", "label": "6404 - Footwear with Textile Uppers"},
+        {"code": "6401", "label": "6401 - Waterproof Footwear"},
+        {"code": "4202", "label": "4202 - Travel Goods / Handbags"},
+        {"code": "4203", "label": "4203 - Articles of Leather"},
+        {"code": "4101", "label": "4101 - Raw Bovine / Equine Hides"},
+    ],
+    "Plastics & Rubber": [
+        {"code": "3901", "label": "3901 - Polyethylene"},
+        {"code": "3902", "label": "3902 - Polypropylene"},
+        {"code": "3903", "label": "3903 - Polystyrene"},
+        {"code": "3904", "label": "3904 - PVC"},
+        {"code": "3907", "label": "3907 - Polyesters"},
+        {"code": "3917", "label": "3917 - Plastic Tubes / Pipes"},
+        {"code": "3923", "label": "3923 - Plastic Containers"},
+        {"code": "3926", "label": "3926 - Other Plastic Articles"},
+        {"code": "4002", "label": "4002 - Synthetic Rubber"},
+        {"code": "4016", "label": "4016 - Other Rubber Articles"},
+    ],
+    "Paper & Wood Products": [
+        {"code": "4403", "label": "4403 - Wood in the Rough"},
+        {"code": "4407", "label": "4407 - Wood Sawn / Chipped"},
+        {"code": "4412", "label": "4412 - Plywood"},
+        {"code": "4418", "label": "4418 - Builders Joinery (Doors/Windows)"},
+        {"code": "4802", "label": "4802 - Uncoated Paper"},
+        {"code": "4810", "label": "4810 - Paper Coated with Kaolin"},
+        {"code": "4819", "label": "4819 - Cartons / Boxes"},
+        {"code": "4821", "label": "4821 - Paper Labels"},
+        {"code": "4701", "label": "4701 - Mechanical Wood Pulp"},
+    ],
+    "Construction Materials": [
+        {"code": "2523", "label": "2523 - Portland Cement"},
+        {"code": "2515", "label": "2515 - Marble / Travertine"},
+        {"code": "2516", "label": "2516 - Granite / Basalt"},
+        {"code": "6907", "label": "6907 - Ceramic Tiles / Flags"},
+        {"code": "6901", "label": "6901 - Bricks / Tiles (Fired)"},
+        {"code": "7214", "label": "7214 - Iron / Steel Bars"},
+        {"code": "7308", "label": "7308 - Structures of Iron / Steel"},
+        {"code": "7610", "label": "7610 - Aluminium Structures"},
+        {"code": "6810", "label": "6810 - Articles of Cement / Concrete"},
+        {"code": "7010", "label": "7010 - Glass Containers"},
+    ],
+    "Handicrafts & Artisans": [
+        {"code": "4420", "label": "4420 - Wood Carvings / Marquetry"},
+        {"code": "5701", "label": "5701 - Knotted Carpets / Rugs"},
+        {"code": "5702", "label": "5702 - Woven Carpets"},
+        {"code": "6913", "label": "6913 - Ceramic Ornaments / Statuettes"},
+        {"code": "9701", "label": "9701 - Paintings / Drawings"},
+        {"code": "9703", "label": "9703 - Sculptures / Statuary"},
+        {"code": "6304", "label": "6304 - Furnishing Articles (Handmade)"},
+        {"code": "9602", "label": "9602 - Worked Vegetable / Mineral Materials"},
+    ],
+}
 ENGAGEMENT_MODES = ["Introduction-only", "Introduction + Negotiation Support"]
 PIPELINE_STAGES = ["Received", "Interest", "Shortlisted", "Introduction", "Negotiation", "Closed"]
 
@@ -81,11 +302,23 @@ TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
 
 CERTIFICATIONS = {
-    "Agriculture": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal"],
-    "Marine / Frozen Foods": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal"],
-    "Pharma": ["WHO-GMP", "USFDA", "EU-GMP", "ISO 9001"],
-    "Special Chemicals": ["ISO 9001", "ISO 14001", "REACH", "MSDS"],
-    "Value-Added Agri Products": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal"]
+    "Agriculture": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal", "Organic", "GlobalG.A.P."],
+    "Marine / Frozen Foods": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal", "MSC", "ASC"],
+    "Pharma & Life Sciences": ["WHO-GMP", "USFDA", "EU-GMP", "ISO 9001", "ISO 13485", "GLP"],
+    "Chemicals & Petrochemicals": ["ISO 9001", "ISO 14001", "REACH", "MSDS", "ADR", "ISO 45001"],
+    "Special Chemicals": ["ISO 9001", "ISO 14001", "REACH", "MSDS", "ADR"],
+    "Textiles & Apparel": ["OEKO-TEX", "GOTS", "ISO 9001", "SA8000", "BCI"],
+    "Engineering & Machinery": ["ISO 9001", "CE Mark", "ISO 14001", "ISO 45001", "BIS"],
+    "Electronics & Technology": ["CE Mark", "RoHS", "ISO 9001", "FCC", "BIS"],
+    "Auto Components": ["ISO 9001", "IATF 16949", "CE Mark", "BIS", "AIS"],
+    "Food & Beverages": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal", "Kosher", "FDA"],
+    "Value-Added Agri Products": ["FSSAI", "ISO 22000", "HACCP", "BRC", "Halal", "Organic"],
+    "Gems & Jewellery": ["ISO 9001", "BIS Hallmark", "Kimberley Process", "RJC"],
+    "Leather & Footwear": ["ISO 9001", "LWG", "REACH", "SA8000"],
+    "Plastics & Rubber": ["ISO 9001", "REACH", "RoHS", "ISO 14001"],
+    "Paper & Wood Products": ["ISO 9001", "FSC", "PEFC", "ISO 14001"],
+    "Construction Materials": ["ISO 9001", "CE Mark", "BIS", "ISO 14001"],
+    "Handicrafts & Artisans": ["ISO 9001", "Fair Trade", "EPCH"],
 }
 
 class UserCreate(BaseModel):
@@ -429,50 +662,8 @@ async def require_buyer(user: dict = Depends(get_current_user)):
 # ===================== AI SERVICE =====================
 
 async def ai_parse_opportunity(raw_text: str) -> dict:
-    """Use GPT-5.2 via Emergent to parse raw text into structured opportunity"""
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        
-        api_key = os.environ.get('EMERGENT_LLM_KEY')
-        if not api_key:
-            logger.warning("No EMERGENT_LLM_KEY found, using mock parsing")
-            return mock_parse_opportunity(raw_text)
-        
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"parse-{uuid.uuid4()}",
-            system_message="""You are a trade opportunity parser. Extract structured data from trade briefs.
-Return ONLY valid JSON with these fields:
-{
-    "sector": "one of: Agriculture, Marine / Frozen Foods, Pharma, Special Chemicals, Value-Added Agri Products",
-    "source_country": "country name",
-    "region": "one of: Africa, Middle East, Europe",
-    "product_name": "product name",
-    "hs_code": "HS code if mentioned or null",
-    "quantity": "quantity with unit",
-    "delivery_timeline": "timeline description",
-    "compliance_requirements": ["list of certifications required"],
-    "opportunity_score": 0.0 to 1.0 based on feasibility,
-    "risk_score": 0.0 to 1.0 based on complexity
-}"""
-        ).with_model("openai", "gpt-5.2")
-        
-        response = await chat.send_message(UserMessage(text=f"Parse this trade brief:\n\n{raw_text}"))
-        
-        # Extract JSON from response
-        try:
-            start = response.find('{')
-            end = response.rfind('}') + 1
-            if start != -1 and end > start:
-                parsed = json.loads(response[start:end])
-                return parsed
-        except json.JSONDecodeError:
-            pass
-        
-        return mock_parse_opportunity(raw_text)
-    except Exception as e:
-        logger.error(f"AI parsing error: {e}")
-        return mock_parse_opportunity(raw_text)
+    """Parse raw text into structured opportunity using keyword matching."""
+    return mock_parse_opportunity(raw_text)
 
 def mock_parse_opportunity(raw_text: str) -> dict:
     """Fallback mock parser"""
@@ -508,45 +699,16 @@ def mock_parse_opportunity(raw_text: str) -> dict:
     }
 
 async def ai_score_opportunity(opportunity: dict) -> tuple:
-    """Calculate opportunity and risk scores"""
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        
-        api_key = os.environ.get('EMERGENT_LLM_KEY')
-        if not api_key:
-            return (0.75, 0.25)
-        
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"score-{uuid.uuid4()}",
-            system_message="Score trade opportunities. Return JSON: {\"opportunity_score\": 0.0-1.0, \"risk_score\": 0.0-1.0}"
-        ).with_model("openai", "gpt-5.2")
-        
-        response = await chat.send_message(UserMessage(
-            text=f"Score this opportunity:\nSector: {opportunity.get('sector')}\nCountry: {opportunity.get('source_country')}\nQuantity: {opportunity.get('quantity')}\nCompliance: {opportunity.get('compliance_requirements')}"
-        ))
-        
-        try:
-            start = response.find('{')
-            end = response.rfind('}') + 1
-            if start != -1 and end > start:
-                scores = json.loads(response[start:end])
-                return (scores.get("opportunity_score", 0.75), scores.get("risk_score", 0.25))
-        except:
-            pass
-        
-        return (0.75, 0.25)
-    except Exception as e:
-        logger.error(f"AI scoring error: {e}")
-        return (0.75, 0.25)
+    """Calculate opportunity and risk scores based on sector and country."""
+    sector = opportunity.get("sector", "")
+    country = opportunity.get("source_country", "")
+    risk = COUNTRY_RISK_SCORES.get(country, 30) / 100.0
+    score = max(0.5, 1.0 - risk * 0.5)
+    return (round(score, 2), round(risk, 2))
 
 async def ai_rank_exporters(opportunity: dict, exporters: list) -> list:
-    """Rank exporters for an opportunity using AI"""
+    """Rank exporters for an opportunity using rule-based scoring."""
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        
-        api_key = os.environ.get('EMERGENT_LLM_KEY')
-        
         # Calculate base scores
         scored_exporters = []
         for exp in exporters:
@@ -815,48 +977,8 @@ async def notify_new_opportunity_matched(exporter_user_id: str, product_name: st
 # ===================== AI DOCUMENT PARSER =====================
 
 async def ai_parse_document(content: str, doc_hint: str = "") -> dict:
-    """Use AI to parse trade documents (LC, Invoice, BL) into structured data."""
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        api_key = os.environ.get("EMERGENT_LLM_KEY")
-        if not api_key:
-            return _mock_document_parse(content, doc_hint)
-
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"doc-parse-{uuid.uuid4()}",
-            system_message="""You are a trade document parser. Extract structured data from Letters of Credit, Invoices, and Bills of Lading.
-Return ONLY valid JSON:
-{
-  "doc_type": "LC|Invoice|Bill of Lading|Certificate of Origin|Other",
-  "product_name": "extracted product",
-  "hs_code": "HS code or null",
-  "quantity": "quantity with unit",
-  "value_usd": number or null,
-  "buyer_name": "buyer company",
-  "seller_name": "seller/exporter company",
-  "origin_country": "country of origin",
-  "destination_country": "destination",
-  "delivery_date": "date string",
-  "payment_terms": "payment terms",
-  "compliance_requirements": ["list of certificates mentioned"],
-  "currency": "USD|EUR|INR etc",
-  "key_notes": "any important clauses or conditions"
-}"""
-        ).with_model("openai", "gpt-5.2")
-
-        response = await chat.send_message(UserMessage(text=f"Parse this trade document:\n\n{content}"))
-        try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start != -1 and end > start:
-                return json.loads(response[start:end])
-        except json.JSONDecodeError:
-            pass
-        return _mock_document_parse(content, doc_hint)
-    except Exception as e:
-        logger.error(f"Document parsing error: {e}")
-        return _mock_document_parse(content, doc_hint)
+    """Parse trade documents (LC, Invoice, BL) using keyword matching."""
+    return _mock_document_parse(content, doc_hint)
 
 def _mock_document_parse(content: str, doc_hint: str = "") -> dict:
     content_lower = content.lower()
@@ -882,6 +1004,18 @@ def _mock_document_parse(content: str, doc_hint: str = "") -> dict:
         "compliance_requirements": ["FSSAI", "ISO 22000"],
         "currency": "USD",
         "key_notes": "Parsed by mock parser. Upload real document for accurate extraction.",
+    }
+
+# ===================== SECTORS & HS CODE REFERENCE ROUTE =====================
+
+@api_router.get("/sectors-data")
+async def get_sectors_data():
+    """Return all sectors, regions, HS codes per sector, and certifications per sector."""
+    return {
+        "sectors": SECTORS,
+        "regions": REGIONS,
+        "hs_codes_by_sector": HS_CODES_BY_SECTOR,
+        "certifications_by_sector": CERTIFICATIONS,
     }
 
 # ===================== AUTH ROUTES =====================
@@ -2021,6 +2155,26 @@ async def admin_verify_rfq_payment(rfq_id: str, user: dict = Depends(require_adm
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="RFQ not found")
     return {"message": "Listing fee marked as paid"}
+
+@api_router.get("/admin/users/buyers")
+async def admin_get_all_buyers(user: dict = Depends(require_admin)):
+    """Return all registered buyers with their profile data."""
+    buyers = await db.users.find({"role": "buyer"}, {"_id": 0, "password": 0}).to_list(500)
+    profiles = await db.buyer_profiles.find({}, {"_id": 0}).to_list(500)
+    profile_map = {p["user_id"]: p for p in profiles}
+    for b in buyers:
+        b["profile"] = profile_map.get(b["id"])
+    return buyers
+
+@api_router.get("/admin/users/exporters")
+async def admin_get_all_exporters(user: dict = Depends(require_admin)):
+    """Return all registered exporters with their profile data."""
+    exporters = await db.users.find({"role": "exporter"}, {"_id": 0, "password": 0}).to_list(500)
+    profiles = await db.exporter_profiles.find({}, {"_id": 0}).to_list(500)
+    profile_map = {p["user_id"]: p for p in profiles}
+    for e in exporters:
+        e["profile"] = profile_map.get(e["id"])
+    return exporters
 
 # ===================== DEAL ROOM (MESSAGING) ROUTES =====================
 

@@ -9,7 +9,11 @@ nixPkgs = ["nodejs_20", "python311"]
 [phases.install]
 cmds = [
   # Python dependencies
+<<<<<<< HEAD
   "pip install -r backend/requirements.txt",
+=======
+  "pip install -r backend/requirements.txt --extra-index-url https://pypi.emergentmethods.ai",
+>>>>>>> claude/code-review-scaling-K6Ydo
   # Node dependencies for frontend build
   "cd frontend && npm install --legacy-peer-deps"
 ]
