@@ -17,6 +17,7 @@ import ExporterFinancing from "@/pages/ExporterFinancing";
 import ExporterSubscription from "@/pages/ExporterSubscription";
 import AdminFinanceRequests from "@/pages/AdminFinanceRequests";
 import AdminRevenue from "@/pages/AdminRevenue";
+import BuyerDiscovery from "@/pages/BuyerDiscovery";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -156,6 +157,7 @@ function AppRoutes() {
       <Route path="/admin/pipeline" element={<ProtectedRoute allowedRoles={["admin"]}><PipelineView /></ProtectedRoute>} />
       <Route path="/admin/finance-requests" element={<ProtectedRoute allowedRoles={["admin"]}><AdminFinanceRequests /></ProtectedRoute>} />
       <Route path="/admin/revenue" element={<ProtectedRoute allowedRoles={["admin"]}><AdminRevenue /></ProtectedRoute>} />
+      <Route path="/admin/buyers" element={<ProtectedRoute allowedRoles={["admin"]}><BuyerDiscovery /></ProtectedRoute>} />
       
       {/* Exporter Routes */}
       <Route path="/exporter" element={<ProtectedRoute allowedRoles={["exporter"]}><ExporterDashboard /></ProtectedRoute>} />

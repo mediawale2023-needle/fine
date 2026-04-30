@@ -211,6 +211,41 @@ class ExporterFinanceProfile(BaseModel):
     export_turnover: float = 1000000
     past_shipments: int = 50
 
+# ===================== BUYER DISCOVERY MODELS =====================
+
+class BuyerDiscoverRequest(BaseModel):
+    hs_code: str
+    country: Optional[str] = None
+    product_name: Optional[str] = None
+    max_results: int = 10
+
+class BuyerContact(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    email: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    source: Optional[str] = None
+
+class BuyerResponse(BaseModel):
+    id: str
+    company_name: str
+    country: Optional[str] = None
+    hs_code: str
+    domain: Optional[str] = None
+    industry: Optional[str] = None
+    headcount: Optional[str] = None
+    hq_city: Optional[str] = None
+    evidence_url: Optional[str] = None
+    evidence_snippet: Optional[str] = None
+    contacts: List[BuyerContact] = []
+    enrichment_status: str = "pending"
+    verified: bool = False
+    discovered_at: str
+    last_enriched_at: Optional[str] = None
+
+class BuyerVerifyUpdate(BaseModel):
+    verified: bool
+
 # ===================== AUTH HELPERS =====================
 
 def hash_password(password: str) -> str:
@@ -246,51 +281,64 @@ async def require_admin(user: dict = Depends(get_current_user)):
 
 # ===================== AI SERVICE =====================
 
-async def ai_parse_opportunity(raw_text: str) -> dict:
-    """Use GPT-5.2 via Emergent to parse raw text into structured opportunity"""
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+
+def _get_openai_client():
+    """Lazy-init the OpenAI async client. Returns None if no key configured."""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        
-        api_key = os.environ.get('EMERGENT_LLM_KEY')
-        if not api_key:
-            logger.warning("No EMERGENT_LLM_KEY found, using mock parsing")
-            return mock_parse_opportunity(raw_text)
-        
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"parse-{uuid.uuid4()}",
-            system_message="""You are a trade opportunity parser. Extract structured data from trade briefs.
-Return ONLY valid JSON with these fields:
-{
-    "sector": "one of: Agriculture, Marine / Frozen Foods, Pharma, Special Chemicals, Value-Added Agri Products",
-    "source_country": "country name",
-    "region": "one of: Africa, Middle East, Europe",
-    "product_name": "product name",
-    "hs_code": "HS code if mentioned or null",
-    "quantity": "quantity with unit",
-    "delivery_timeline": "timeline description",
-    "compliance_requirements": ["list of certifications required"],
-    "opportunity_score": 0.0 to 1.0 based on feasibility,
-    "risk_score": 0.0 to 1.0 based on complexity
-}"""
-        ).with_model("openai", "gpt-5.2")
-        
-        response = await chat.send_message(UserMessage(text=f"Parse this trade brief:\n\n{raw_text}"))
-        
-        # Extract JSON from response
-        try:
-            start = response.find('{')
-            end = response.rfind('}') + 1
-            if start != -1 and end > start:
-                parsed = json.loads(response[start:end])
-                return parsed
-        except json.JSONDecodeError:
-            pass
-        
-        return mock_parse_opportunity(raw_text)
+        from openai import AsyncOpenAI
+        return AsyncOpenAI(api_key=api_key)
     except Exception as e:
-        logger.error(f"AI parsing error: {e}")
-        return mock_parse_opportunity(raw_text)
+        logger.error(f"OpenAI client init failed: {e}")
+        return None
+
+async def openai_chat_json(system: str, user: str, model: Optional[str] = None):
+    """Call OpenAI in JSON mode and return parsed JSON (dict or list). Returns None on failure."""
+    client = _get_openai_client()
+    if client is None:
+        return None
+    try:
+        resp = await client.chat.completions.create(
+            model=model or OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+        )
+        content = resp.choices[0].message.content or ""
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        logger.error(f"OpenAI JSON parse error: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"OpenAI chat error: {e}")
+        return None
+
+async def ai_parse_opportunity(raw_text: str) -> dict:
+    """Parse raw embassy/brief text into structured opportunity via OpenAI."""
+    system = (
+        "You are a trade opportunity parser. Extract structured data from trade briefs. "
+        "Return a JSON object with fields: "
+        "sector (one of: Agriculture, Marine / Frozen Foods, Pharma, Special Chemicals, Value-Added Agri Products), "
+        "source_country (string), "
+        "region (one of: Africa, Middle East, Europe), "
+        "product_name (string), "
+        "hs_code (string or null), "
+        "quantity (string with unit), "
+        "delivery_timeline (string), "
+        "compliance_requirements (array of certification strings), "
+        "opportunity_score (0.0 to 1.0 — feasibility), "
+        "risk_score (0.0 to 1.0 — complexity)."
+    )
+    parsed = await openai_chat_json(system, f"Parse this trade brief:\n\n{raw_text}")
+    if isinstance(parsed, dict):
+        return parsed
+    return mock_parse_opportunity(raw_text)
 
 def mock_parse_opportunity(raw_text: str) -> dict:
     """Fallback mock parser"""
@@ -326,45 +374,25 @@ def mock_parse_opportunity(raw_text: str) -> dict:
     }
 
 async def ai_score_opportunity(opportunity: dict) -> tuple:
-    """Calculate opportunity and risk scores"""
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        
-        api_key = os.environ.get('EMERGENT_LLM_KEY')
-        if not api_key:
-            return (0.75, 0.25)
-        
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"score-{uuid.uuid4()}",
-            system_message="Score trade opportunities. Return JSON: {\"opportunity_score\": 0.0-1.0, \"risk_score\": 0.0-1.0}"
-        ).with_model("openai", "gpt-5.2")
-        
-        response = await chat.send_message(UserMessage(
-            text=f"Score this opportunity:\nSector: {opportunity.get('sector')}\nCountry: {opportunity.get('source_country')}\nQuantity: {opportunity.get('quantity')}\nCompliance: {opportunity.get('compliance_requirements')}"
-        ))
-        
-        try:
-            start = response.find('{')
-            end = response.rfind('}') + 1
-            if start != -1 and end > start:
-                scores = json.loads(response[start:end])
-                return (scores.get("opportunity_score", 0.75), scores.get("risk_score", 0.25))
-        except:
-            pass
-        
-        return (0.75, 0.25)
-    except Exception as e:
-        logger.error(f"AI scoring error: {e}")
-        return (0.75, 0.25)
+    """Calculate opportunity and risk scores via OpenAI. Falls back to (0.75, 0.25)."""
+    user_msg = (
+        f"Score this opportunity:\n"
+        f"Sector: {opportunity.get('sector')}\n"
+        f"Country: {opportunity.get('source_country')}\n"
+        f"Quantity: {opportunity.get('quantity')}\n"
+        f"Compliance: {opportunity.get('compliance_requirements')}"
+    )
+    parsed = await openai_chat_json(
+        "Score trade opportunities. Return JSON: {opportunity_score: 0.0-1.0, risk_score: 0.0-1.0}.",
+        user_msg,
+    )
+    if isinstance(parsed, dict):
+        return (parsed.get("opportunity_score", 0.75), parsed.get("risk_score", 0.25))
+    return (0.75, 0.25)
 
 async def ai_rank_exporters(opportunity: dict, exporters: list) -> list:
-    """Rank exporters for an opportunity using AI"""
+    """Rank exporters for an opportunity using deterministic feature-match scoring."""
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        
-        api_key = os.environ.get('EMERGENT_LLM_KEY')
-        
         # Calculate base scores
         scored_exporters = []
         for exp in exporters:
@@ -396,6 +424,397 @@ async def ai_rank_exporters(opportunity: dict, exporters: list) -> list:
     except Exception as e:
         logger.error(f"AI ranking error: {e}")
         return exporters[:5]
+
+# ===================== BUYER DISCOVERY AGENT =====================
+#
+# Pipeline:
+#   1. Tavily web search → public trade-data snippets (importers/buyers per HS code)
+#   2. OpenAI (gpt-4o-mini, JSON mode) extracts structured rows: [{company, country, domain, evidence}]
+#   3. Apollo /organizations/enrich → domain, industry, headcount, hq
+#   4. Apollo /people/search filtered by procurement-style titles
+#   5. Hunter /domain-search fallback for emails when Apollo has no people
+#
+# Each enrichment step gracefully skips if its API key is missing — V1 with
+# only TAVILY_API_KEY still returns real, sourced buyer rows.
+
+async def tavily_search(query: str, max_results: int = 8) -> list:
+    """Web search via Tavily. Returns [{url, title, content}]."""
+    api_key = os.environ.get("TAVILY_API_KEY")
+    if not api_key:
+        logger.warning("No TAVILY_API_KEY — buyer discovery cannot run")
+        return []
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            res = await client.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": api_key,
+                    "query": query,
+                    "search_depth": "advanced",
+                    "max_results": max_results,
+                    "include_answer": False,
+                },
+            )
+            res.raise_for_status()
+            data = res.json()
+            return [
+                {
+                    "url": r.get("url"),
+                    "title": r.get("title"),
+                    "content": r.get("content", "")[:1500],
+                }
+                for r in data.get("results", [])
+            ]
+    except Exception as e:
+        logger.error(f"Tavily search error: {e}")
+        return []
+
+async def llm_extract_buyers(snippets: list, hs_code: str, product_name: Optional[str], country: Optional[str]) -> list:
+    """Extract structured buyer rows from web snippets via OpenAI JSON mode."""
+    if not snippets:
+        return []
+    if not os.environ.get("OPENAI_API_KEY"):
+        logger.warning("No OPENAI_API_KEY — falling back to naive snippet parse")
+        return _naive_extract_buyers(snippets, country)
+
+    snippets_text = "\n\n".join(
+        f"[{i}] URL: {s['url']}\nTITLE: {s['title']}\nCONTENT: {s['content']}"
+        for i, s in enumerate(snippets)
+    )
+    country_clause = f" in {country}" if country else ""
+    product_clause = f" ({product_name})" if product_name else ""
+
+    system = (
+        "You extract real importer/buyer companies from trade-data web snippets. "
+        "Only include companies that the snippets actually name. Do NOT invent names. "
+        "Return a JSON object with a single key 'buyers' whose value is an array of objects with fields: "
+        "company_name (string), country (string or null), "
+        "company_domain (string — best-guess primary website domain like 'olamgroup.com', or null if unknown — never guess a generic domain), "
+        "evidence_url (string — the source URL from the snippet that names this company), "
+        "evidence_snippet (short quote, <=200 chars, justifying inclusion). "
+        "Skip entries where you cannot identify a specific company name."
+    )
+    user = (
+        f"Find buyers/importers of HS code {hs_code}{product_clause}{country_clause}.\n\n"
+        f"Snippets:\n\n{snippets_text}"
+    )
+    parsed = await openai_chat_json(system, user)
+    rows = []
+    if isinstance(parsed, dict):
+        rows = parsed.get("buyers") or parsed.get("results") or parsed.get("data") or []
+    elif isinstance(parsed, list):
+        rows = parsed
+    if not isinstance(rows, list) or not rows:
+        return _naive_extract_buyers(snippets, country)
+
+    return [
+        {
+            "company_name": (r.get("company_name") or "").strip(),
+            "country": (r.get("country") or country),
+            "company_domain": _clean_domain(r.get("company_domain")),
+            "evidence_url": r.get("evidence_url"),
+            "evidence_snippet": (r.get("evidence_snippet") or "")[:200],
+        }
+        for r in rows
+        if isinstance(r, dict) and (r.get("company_name") or "").strip()
+    ]
+
+def _naive_extract_buyers(snippets: list, country: Optional[str]) -> list:
+    """Last-resort: surface snippets as raw evidence rows so admin still sees something."""
+    out = []
+    for s in snippets[:5]:
+        title = (s.get("title") or "").strip()
+        if not title:
+            continue
+        out.append({
+            "company_name": title[:120],
+            "country": country,
+            "company_domain": None,
+            "evidence_url": s.get("url"),
+            "evidence_snippet": (s.get("content") or "")[:200],
+        })
+    return out
+
+# Trade-data hosts whose URLs are NOT a buyer's own website
+_TRADE_DATA_HOSTS = {
+    "volza.com", "panjiva.com", "importgenius.com", "trademap.org",
+    "exportgenius.in", "tradedata.pro", "exim.gov.in", "spgglobal.com",
+    "thetradedesk.com", "marketresearch.com", "datawheel.us", "ibef.org",
+    "linkedin.com", "wikipedia.org", "facebook.com", "twitter.com", "x.com",
+    "youtube.com", "google.com", "amazon.com", "alibaba.com",
+}
+
+def _clean_domain(value) -> Optional[str]:
+    """Normalize 'https://www.foo.com/path' → 'foo.com'. Reject trade-data hosts."""
+    if not value or not isinstance(value, str):
+        return None
+    v = value.strip().lower()
+    if not v:
+        return None
+    # strip scheme
+    for prefix in ("https://", "http://"):
+        if v.startswith(prefix):
+            v = v[len(prefix):]
+    # strip path/query/fragment
+    for sep in ("/", "?", "#"):
+        idx = v.find(sep)
+        if idx != -1:
+            v = v[:idx]
+    if v.startswith("www."):
+        v = v[4:]
+    if not v or "." not in v:
+        return None
+    if v in _TRADE_DATA_HOSTS:
+        return None
+    return v
+
+def _domain_from_evidence_url(url: Optional[str]) -> Optional[str]:
+    """Pull a candidate company domain from an evidence URL, skipping trade-data hosts."""
+    return _clean_domain(url)
+
+async def apollo_enrich_organization(domain: Optional[str]) -> Optional[dict]:
+    """Apollo organization enrichment by domain. Returns {domain, industry, headcount, hq_city, apollo_id} or None."""
+    api_key = os.environ.get("APOLLO_API_KEY")
+    if not api_key or not domain:
+        return None
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            res = await client.get(
+                "https://api.apollo.io/api/v1/organizations/enrich",
+                params={"domain": domain},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Content-Type": "application/json",
+                    "X-Api-Key": api_key,
+                },
+            )
+            if res.status_code != 200:
+                return None
+            org = (res.json() or {}).get("organization") or {}
+            if not org:
+                return None
+            return {
+                "apollo_id": org.get("id"),
+                "domain": org.get("primary_domain") or _clean_domain(org.get("website_url")) or domain,
+                "industry": org.get("industry"),
+                "headcount": str(org.get("estimated_num_employees") or "") or None,
+                "hq_city": org.get("city"),
+            }
+    except Exception as e:
+        logger.error(f"Apollo enrich error for {domain}: {e}")
+        return None
+
+async def apollo_search_people(apollo_org_id: str) -> list:
+    """Search Apollo people filtered by procurement-style titles. Returns list of contacts."""
+    api_key = os.environ.get("APOLLO_API_KEY")
+    if not api_key or not apollo_org_id:
+        return []
+    try:
+        import httpx
+        titles = ["procurement", "imports", "sourcing", "buyer", "purchasing", "supply chain"]
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            res = await client.post(
+                "https://api.apollo.io/api/v1/mixed_people/search",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Content-Type": "application/json",
+                    "X-Api-Key": api_key,
+                },
+                json={
+                    "organization_ids": [apollo_org_id],
+                    "person_titles": titles,
+                    "page": 1,
+                    "per_page": 5,
+                },
+            )
+            if res.status_code != 200:
+                return []
+            people = (res.json() or {}).get("people", [])
+            return [
+                {
+                    "name": p.get("name"),
+                    "title": p.get("title"),
+                    "email": p.get("email"),
+                    "linkedin_url": p.get("linkedin_url"),
+                    "source": "apollo",
+                }
+                for p in people
+                if p.get("name")
+            ]
+    except Exception as e:
+        logger.error(f"Apollo people search error: {e}")
+        return []
+
+async def hunter_domain_search(domain: str) -> list:
+    """Hunter.io domain search → emails by role. Fallback when Apollo has no people."""
+    api_key = os.environ.get("HUNTER_API_KEY")
+    if not api_key or not domain:
+        return []
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            res = await client.get(
+                "https://api.hunter.io/v2/domain-search",
+                params={
+                    "domain": domain,
+                    "api_key": api_key,
+                    "limit": 10,
+                },
+            )
+            if res.status_code != 200:
+                return []
+            emails = (res.json() or {}).get("data", {}).get("emails", [])
+            return [
+                {
+                    "name": (
+                        " ".join(filter(None, [e.get("first_name"), e.get("last_name")])).strip()
+                        or None
+                    ),
+                    "title": e.get("position"),
+                    "email": e.get("value"),
+                    "linkedin_url": e.get("linkedin"),
+                    "source": "hunter",
+                }
+                for e in emails
+                if e.get("value")
+            ]
+    except Exception as e:
+        logger.error(f"Hunter domain search error: {e}")
+        return []
+
+async def discover_buyers_for_hs(
+    hs_code: str,
+    country: Optional[str] = None,
+    product_name: Optional[str] = None,
+    max_results: int = 10,
+) -> list:
+    """
+    Orchestrator. Returns list of buyer dicts (already upserted into Mongo).
+    Steps degrade gracefully if Apollo/Hunter keys are missing.
+    """
+    # Build search queries — multiple angles improve recall
+    base = f"importers buyers HS code {hs_code}"
+    if product_name:
+        base += f" {product_name}"
+    queries = [
+        f"{base}{(' in ' + country) if country else ''}",
+        f"{(product_name or 'HS ' + hs_code)} importers list{(' ' + country) if country else ''} site:volza.com OR site:panjiva.com OR site:importgenius.com OR site:trademap.org",
+        f"top importers of {(product_name or hs_code)}{(' ' + country) if country else ''}",
+    ]
+
+    # 1. Tavily searches (parallel-ish via sequential awaits — small N)
+    all_snippets = []
+    seen_urls = set()
+    for q in queries:
+        results = await tavily_search(q, max_results=8)
+        for r in results:
+            if r["url"] and r["url"] not in seen_urls:
+                seen_urls.add(r["url"])
+                all_snippets.append(r)
+
+    if not all_snippets:
+        return []
+
+    # 2. LLM extraction
+    candidates = await llm_extract_buyers(all_snippets, hs_code, product_name, country)
+
+    # Dedup within this batch on (company_name lowercased, country)
+    deduped = {}
+    for c in candidates:
+        key = (c["company_name"].lower().strip(), (c.get("country") or "").lower().strip())
+        if key not in deduped:
+            deduped[key] = c
+    candidates = list(deduped.values())[:max_results]
+
+    # 3 + 4 + 5. Enrichment loop
+    now_iso = datetime.now(timezone.utc).isoformat()
+    saved = []
+    for cand in candidates:
+        company_name = cand["company_name"]
+        cand_country = cand.get("country")
+
+        # Resolve a domain: LLM-extracted first, then evidence-URL host (skipping trade-data hosts)
+        domain = _clean_domain(cand.get("company_domain")) or _domain_from_evidence_url(cand.get("evidence_url"))
+
+        contacts: list = []
+        enrichment_status = "pending"
+
+        org = await apollo_enrich_organization(domain) if domain else None
+        if org:
+            enrichment_status = "partial"
+            # Apollo people search is paid-only on the Free plan — call returns [] silently if blocked.
+            people = await apollo_search_people(org.get("apollo_id"))
+            if people:
+                contacts.extend(people)
+                enrichment_status = "enriched"
+
+        # Hunter is the primary email source when Apollo people-search is unavailable
+        if domain and not contacts:
+            hunter_contacts = await hunter_domain_search(domain)
+            if hunter_contacts:
+                contacts.extend(hunter_contacts)
+                enrichment_status = "enriched" if org else "partial"
+
+        # Upsert (dedup on company+country+hs_code)
+        existing = await db.buyers.find_one(
+            {
+                "company_name_lower": company_name.lower(),
+                "country_lower": (cand_country or "").lower(),
+                "hs_code": hs_code,
+            },
+            {"_id": 0},
+        )
+
+        doc = {
+            "company_name": company_name,
+            "company_name_lower": company_name.lower(),
+            "country": cand_country,
+            "country_lower": (cand_country or "").lower(),
+            "hs_code": hs_code,
+            "domain": (org or {}).get("domain") or domain,
+            "industry": (org or {}).get("industry"),
+            "headcount": (org or {}).get("headcount"),
+            "hq_city": (org or {}).get("hq_city"),
+            "evidence_url": cand.get("evidence_url"),
+            "evidence_snippet": cand.get("evidence_snippet"),
+            "contacts": contacts,
+            "enrichment_status": enrichment_status,
+            "last_enriched_at": now_iso if org or contacts else None,
+        }
+
+        if existing:
+            await db.buyers.update_one({"id": existing["id"]}, {"$set": doc})
+            buyer_id = existing["id"]
+            verified = existing.get("verified", False)
+            discovered_at = existing.get("discovered_at", now_iso)
+        else:
+            buyer_id = str(uuid.uuid4())
+            doc.update({"id": buyer_id, "verified": False, "discovered_at": now_iso})
+            await db.buyers.insert_one(doc)
+            verified = False
+            discovered_at = now_iso
+
+        saved.append({
+            "id": buyer_id,
+            "company_name": company_name,
+            "country": cand_country,
+            "hs_code": hs_code,
+            "domain": doc["domain"],
+            "industry": doc["industry"],
+            "headcount": doc["headcount"],
+            "hq_city": doc["hq_city"],
+            "evidence_url": doc["evidence_url"],
+            "evidence_snippet": doc["evidence_snippet"],
+            "contacts": contacts,
+            "enrichment_status": enrichment_status,
+            "verified": verified,
+            "discovered_at": discovered_at,
+            "last_enriched_at": doc["last_enriched_at"],
+        })
+
+    return saved
 
 # ===================== RISK SCORING ENGINE =====================
 
@@ -1465,6 +1884,66 @@ async def seed_data():
     
     return {"message": "Demo data seeded successfully"}
 
+# ===================== BUYER DISCOVERY ROUTES =====================
+
+@api_router.post("/buyers/discover", response_model=List[BuyerResponse])
+async def buyers_discover(req: BuyerDiscoverRequest, user: dict = Depends(require_admin)):
+    """Run search-grounded buyer discovery for an HS code (+ optional country/product)."""
+    if not req.hs_code or not req.hs_code.strip():
+        raise HTTPException(status_code=400, detail="hs_code is required")
+    if not os.environ.get("TAVILY_API_KEY"):
+        raise HTTPException(
+            status_code=503,
+            detail="Buyer discovery unavailable: TAVILY_API_KEY not configured on backend",
+        )
+    rows = await discover_buyers_for_hs(
+        hs_code=req.hs_code.strip(),
+        country=(req.country or None),
+        product_name=(req.product_name or None),
+        max_results=max(1, min(req.max_results, 25)),
+    )
+    return [BuyerResponse(**r) for r in rows]
+
+@api_router.get("/buyers", response_model=List[BuyerResponse])
+async def buyers_list(
+    hs_code: Optional[str] = None,
+    country: Optional[str] = None,
+    verified: Optional[bool] = None,
+    limit: int = 100,
+    user: dict = Depends(require_admin),
+):
+    query: dict = {}
+    if hs_code:
+        query["hs_code"] = hs_code
+    if country:
+        query["country_lower"] = country.lower()
+    if verified is not None:
+        query["verified"] = verified
+    rows = await db.buyers.find(query, {"_id": 0}).sort("discovered_at", -1).to_list(max(1, min(limit, 500)))
+    return [BuyerResponse(**{k: v for k, v in r.items() if k not in ("company_name_lower", "country_lower")}) for r in rows]
+
+@api_router.get("/buyers/{buyer_id}", response_model=BuyerResponse)
+async def buyers_get(buyer_id: str, user: dict = Depends(require_admin)):
+    row = await db.buyers.find_one({"id": buyer_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="Buyer not found")
+    return BuyerResponse(**{k: v for k, v in row.items() if k not in ("company_name_lower", "country_lower")})
+
+@api_router.put("/buyers/{buyer_id}/verify", response_model=BuyerResponse)
+async def buyers_verify(buyer_id: str, body: BuyerVerifyUpdate, user: dict = Depends(require_admin)):
+    result = await db.buyers.update_one({"id": buyer_id}, {"$set": {"verified": body.verified}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Buyer not found")
+    row = await db.buyers.find_one({"id": buyer_id}, {"_id": 0})
+    return BuyerResponse(**{k: v for k, v in row.items() if k not in ("company_name_lower", "country_lower")})
+
+@api_router.delete("/buyers/{buyer_id}")
+async def buyers_delete(buyer_id: str, user: dict = Depends(require_admin)):
+    result = await db.buyers.delete_one({"id": buyer_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Buyer not found")
+    return {"deleted": True}
+
 # ===================== HEALTH CHECK =====================
 
 @api_router.get("/")
@@ -1485,6 +1964,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def ensure_indexes():
+    try:
+        await db.buyers.create_index("hs_code")
+        await db.buyers.create_index([("company_name_lower", 1), ("country_lower", 1), ("hs_code", 1)])
+    except Exception as e:
+        logger.warning(f"Index creation skipped: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

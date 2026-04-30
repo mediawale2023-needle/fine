@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { 
-  ArrowLeft, MapPin, Package, Calendar, Shield, FileText, 
-  Users, Zap, CheckCircle, Building2, TrendingUp, AlertTriangle
+import {
+  ArrowLeft, MapPin, Package, Calendar, Shield, FileText,
+  Users, Zap, CheckCircle, Building2, TrendingUp, AlertTriangle, Search
 } from "lucide-react";
 
 export default function OpportunityDetail() {
@@ -162,6 +162,26 @@ export default function OpportunityDetail() {
                 >
                   <Zap className="w-4 h-4 mr-2" />
                   {matching ? "Matching..." : "Run AI Match"}
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!opportunity.hs_code) {
+                      toast.error("This opportunity has no HS code — add one to discover buyers");
+                      return;
+                    }
+                    const params = new URLSearchParams({
+                      hs_code: opportunity.hs_code,
+                      country: opportunity.source_country || "",
+                      product: opportunity.product_name || "",
+                    });
+                    navigate(`/admin/buyers?${params.toString()}`);
+                  }}
+                  data-testid="find-buyers-btn"
+                  variant="outline"
+                  className="border-slate-200"
+                >
+                  <Search className="w-4 h-4 mr-2" />
+                  Find Buyers
                 </Button>
               </div>
             )}

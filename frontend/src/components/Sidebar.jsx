@@ -1,17 +1,18 @@
 import { useAuth } from "@/App";
 import { useNavigate, useLocation } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  FileText, 
-  PlusCircle, 
-  GitBranch, 
-  User, 
+import {
+  LayoutDashboard,
+  FileText,
+  PlusCircle,
+  GitBranch,
+  User,
   LogOut,
   Building2,
   Wallet,
   ShieldCheck,
   CreditCard,
-  DollarSign
+  DollarSign,
+  Search
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -24,6 +25,7 @@ export default function Sidebar() {
   const adminLinks = [
     { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
     { path: "/admin/create-opportunity", icon: PlusCircle, label: "New Opportunity" },
+    { path: "/admin/buyers", icon: Search, label: "Buyer Discovery" },
     { path: "/admin/pipeline", icon: GitBranch, label: "Pipeline" },
     { path: "/admin/finance-requests", icon: Wallet, label: "Finance Requests" },
     { path: "/admin/revenue", icon: DollarSign, label: "Revenue" },
