@@ -1,5 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -1976,3 +1978,40 @@ async def ensure_indexes():
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+# ===================== STATIC SPA SERVING =====================
+# Single-service deploy: FastAPI serves the React build under the same domain.
+# Path is overridable for flexible Railway/Nixpacks layouts.
+
+_FRONTEND_BUILD_DIR = os.environ.get("FRONTEND_BUILD_DIR", "")
+if _FRONTEND_BUILD_DIR:
+    _frontend_candidates = [Path(_FRONTEND_BUILD_DIR)]
+else:
+    _frontend_candidates = [
+        ROOT_DIR.parent / "frontend" / "build",
+        Path("/app/frontend/build"),
+        ROOT_DIR / "frontend" / "build",
+    ]
+_frontend_dir = next((p for p in _frontend_candidates if p.exists()), None)
+
+if _frontend_dir is not None:
+    _static_dir = _frontend_dir / "static"
+    if _static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+    @app.get("/{full_path:path}")
+    async def spa_catch_all(full_path: str):
+        # API routes already matched above by include_router; this only fires on misses
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        # Serve specific static asset if it exists (favicon, manifest, etc.)
+        candidate = _frontend_dir / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(str(candidate))
+        # Otherwise hand back index.html for the SPA router
+        index = _frontend_dir / "index.html"
+        if index.exists():
+            return FileResponse(str(index))
+        raise HTTPException(status_code=404, detail="Frontend build not found")
+else:
+    logger.info("No frontend build directory found — running in API-only mode")
