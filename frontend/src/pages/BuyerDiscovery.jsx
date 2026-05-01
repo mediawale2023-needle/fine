@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import Sidebar from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   Search,
@@ -19,7 +21,24 @@ import {
   ShieldAlert,
   Trash2,
   Linkedin,
+  PlusCircle,
 } from "lucide-react";
+
+const SECTORS = ["Agriculture", "Marine / Frozen Foods", "Pharma", "Special Chemicals", "Value-Added Agri Products"];
+const REGION_BY_COUNTRY = {
+  // Africa
+  nigeria: "Africa", kenya: "Africa", "south africa": "Africa", morocco: "Africa", egypt: "Africa",
+  ghana: "Africa", tanzania: "Africa", ethiopia: "Africa", senegal: "Africa", algeria: "Africa",
+  // Middle East
+  uae: "Middle East", "united arab emirates": "Middle East", "saudi arabia": "Middle East",
+  qatar: "Middle East", oman: "Middle East", kuwait: "Middle East", bahrain: "Middle East",
+  jordan: "Middle East", israel: "Middle East", turkey: "Middle East",
+  // Europe
+  germany: "Europe", france: "Europe", uk: "Europe", "united kingdom": "Europe",
+  netherlands: "Europe", spain: "Europe", italy: "Europe", belgium: "Europe", poland: "Europe",
+  sweden: "Europe", denmark: "Europe", norway: "Europe", finland: "Europe", switzerland: "Europe",
+};
+const inferRegion = (country) => REGION_BY_COUNTRY[(country || "").toLowerCase().trim()] || "";
 
 const STATUS_BADGE = {
   enriched: { label: "Enriched", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -30,6 +49,7 @@ const STATUS_BADGE = {
 
 export default function BuyerDiscovery() {
   const { authAxios } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [hsCode, setHsCode] = useState(searchParams.get("hs_code") || "");
@@ -39,6 +59,63 @@ export default function BuyerDiscovery() {
   const [discovering, setDiscovering] = useState(false);
   const [loading, setLoading] = useState(false);
   const [buyers, setBuyers] = useState([]);
+
+  // "Add to Opportunity" modal state
+  const [oppModal, setOppModal] = useState({ open: false, buyer: null });
+  const [oppForm, setOppForm] = useState({
+    sector: "",
+    region: "",
+    product_name: "",
+    quantity: "",
+    delivery_timeline: "",
+  });
+  const [creatingOpp, setCreatingOpp] = useState(false);
+
+  const openOpportunityModal = (buyer) => {
+    setOppForm({
+      sector: "",
+      region: inferRegion(buyer.country) || "",
+      product_name: productName || `${buyer.hs_code} import demand`,
+      quantity: "",
+      delivery_timeline: "",
+    });
+    setOppModal({ open: true, buyer });
+  };
+
+  const submitOpportunity = async () => {
+    const buyer = oppModal.buyer;
+    if (!buyer) return;
+    if (!oppForm.sector || !oppForm.region || !oppForm.product_name || !oppForm.quantity || !oppForm.delivery_timeline) {
+      toast.error("Fill in sector, region, product, quantity, and timeline");
+      return;
+    }
+    if (!buyer.country) {
+      toast.error("Buyer has no country — cannot create opportunity");
+      return;
+    }
+    setCreatingOpp(true);
+    try {
+      await authAxios.post("/opportunities", {
+        sector: oppForm.sector,
+        source_country: buyer.country,
+        region: oppForm.region,
+        product_name: oppForm.product_name,
+        hs_code: buyer.hs_code || null,
+        quantity: oppForm.quantity,
+        delivery_timeline: oppForm.delivery_timeline,
+        compliance_requirements: [],
+        engagement_mode: "Introduction-only",
+        buyer_id: buyer.id,
+        buyer_company: buyer.company_name,
+      });
+      toast.success(`Opportunity created for ${buyer.company_name}`);
+      setOppModal({ open: false, buyer: null });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to create opportunity");
+    } finally {
+      setCreatingOpp(false);
+    }
+  };
 
   const fetchExisting = async (filters = {}) => {
     setLoading(true);
@@ -366,6 +443,14 @@ export default function BuyerDiscovery() {
                       {/* Right: actions */}
                       <div className="flex flex-col gap-2 flex-shrink-0">
                         <Button
+                          size="sm"
+                          onClick={() => openOpportunityModal(b)}
+                          data-testid={`add-to-opportunity-${b.id}`}
+                          className="bg-navy hover:bg-charcoal text-white"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5 mr-1.5" /> Add to Opportunity
+                        </Button>
+                        <Button
                           variant="outline"
                           size="sm"
                           onClick={() => toggleVerified(b)}
@@ -397,6 +482,105 @@ export default function BuyerDiscovery() {
             </div>
           )}
         </div>
+
+        {/* Add to Opportunity modal */}
+        <Dialog open={oppModal.open} onOpenChange={(o) => !o && setOppModal({ open: false, buyer: null })}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Add {oppModal.buyer?.company_name} to Opportunities</DialogTitle>
+              <DialogDescription>
+                Creates a new opportunity using this buyer's country and the discovery's HS code. Fill in
+                sector, quantity, and timeline. The opportunity appears on the admin dashboard immediately.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 mt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-slate-500">Source Country</Label>
+                  <Input value={oppModal.buyer?.country || ""} disabled className="mt-1.5 bg-slate-50" />
+                </div>
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-slate-500">HS Code</Label>
+                  <Input value={oppModal.buyer?.hs_code || ""} disabled className="mt-1.5 font-mono bg-slate-50" />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs uppercase tracking-wider text-slate-500">Product Name *</Label>
+                <Input
+                  value={oppForm.product_name}
+                  onChange={(e) => setOppForm({ ...oppForm, product_name: e.target.value })}
+                  className="mt-1.5"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-slate-500">Sector *</Label>
+                  <Select value={oppForm.sector} onValueChange={(v) => setOppForm({ ...oppForm, sector: v })}>
+                    <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select sector" /></SelectTrigger>
+                    <SelectContent>
+                      {SECTORS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-slate-500">Region *</Label>
+                  <Select value={oppForm.region} onValueChange={(v) => setOppForm({ ...oppForm, region: v })}>
+                    <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select region" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Africa">Africa</SelectItem>
+                      <SelectItem value="Middle East">Middle East</SelectItem>
+                      <SelectItem value="Europe">Europe</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-slate-500">Quantity *</Label>
+                  <Input
+                    value={oppForm.quantity}
+                    onChange={(e) => setOppForm({ ...oppForm, quantity: e.target.value })}
+                    placeholder="e.g., 2000 MT"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-slate-500">Delivery Timeline *</Label>
+                  <Input
+                    value={oppForm.delivery_timeline}
+                    onChange={(e) => setOppForm({ ...oppForm, delivery_timeline: e.target.value })}
+                    placeholder="e.g., Q1 2026"
+                    className="mt-1.5"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setOppModal({ open: false, buyer: null })}>Cancel</Button>
+              <Button
+                onClick={submitOpportunity}
+                disabled={creatingOpp}
+                data-testid="submit-opportunity-btn"
+                className="bg-navy hover:bg-charcoal text-white"
+              >
+                {creatingOpp ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : "Create Opportunity"}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => { submitOpportunity(); setTimeout(() => navigate("/admin"), 600); }}
+                disabled={creatingOpp}
+                className="text-navy"
+              >
+                Create + Go to Dashboard
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

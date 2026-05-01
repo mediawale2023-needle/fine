@@ -84,6 +84,8 @@ class OpportunityCreate(BaseModel):
     compliance_requirements: List[str] = []
     engagement_mode: str = "Introduction-only"
     raw_text: Optional[str] = None
+    buyer_id: Optional[str] = None
+    buyer_company: Optional[str] = None
 
 class OpportunityResponse(BaseModel):
     id: str
@@ -101,6 +103,8 @@ class OpportunityResponse(BaseModel):
     status: str
     created_at: str
     matched_exporters: List[dict] = []
+    buyer_id: Optional[str] = None
+    buyer_company: Optional[str] = None
 
 class ExporterProfileCreate(BaseModel):
     sectors: List[str]
@@ -487,11 +491,19 @@ async def llm_extract_buyers(snippets: list, hs_code: str, product_name: Optiona
     country_clause = f" in {country}" if country else ""
     product_clause = f" ({product_name})" if product_name else ""
 
+    country_rule = (
+        f"Each company must be located IN {country} (its headquarters or primary operations). "
+        f"REJECT any company headquartered outside {country}. "
+        f"In particular, do NOT include US-based companies unless the user asked for the United States. "
+        if country else
+        "Capture each company's actual country from the snippet. "
+    )
     system = (
         "You extract real importer/buyer companies from trade-data web snippets. "
         "Only include companies that the snippets actually name. Do NOT invent names. "
+        + country_rule +
         "Return a JSON object with a single key 'buyers' whose value is an array of objects with fields: "
-        "company_name (string), country (string or null), "
+        "company_name (string), country (string or null — the buyer's country, not the trade-data site's country), "
         "company_domain (string — best-guess primary website domain like 'olamgroup.com', or null if unknown — never guess a generic domain), "
         "evidence_url (string — the source URL from the snippet that names this company), "
         "evidence_snippet (short quote, <=200 chars, justifying inclusion). "
@@ -696,14 +708,18 @@ async def discover_buyers_for_hs(
     Orchestrator. Returns list of buyer dicts (already upserted into Mongo).
     Steps degrade gracefully if Apollo/Hunter keys are missing.
     """
-    # Build search queries — multiple angles improve recall
-    base = f"importers buyers HS code {hs_code}"
-    if product_name:
-        base += f" {product_name}"
+    # Build search queries — multiple angles improve recall, country-anchored to
+    # avoid trade-data sites (volza/panjiva/importgenius are US-heavy by default)
+    # returning only US importers when a non-US country was requested.
+    product_or_hs = product_name or f"HS {hs_code}"
+    in_country = f" in {country}" if country else ""
+    exclude_us = ' -"united states"' if country and country.lower() not in ("usa", "us", "united states") else ""
+
     queries = [
-        f"{base}{(' in ' + country) if country else ''}",
-        f"{(product_name or 'HS ' + hs_code)} importers list{(' ' + country) if country else ''} site:volza.com OR site:panjiva.com OR site:importgenius.com OR site:trademap.org",
-        f"top importers of {(product_name or hs_code)}{(' ' + country) if country else ''}",
+        f"importers of {product_or_hs}{in_country}{exclude_us}",
+        f"companies importing {product_or_hs}{in_country}{exclude_us}",
+        f"top {country} importers of {product_or_hs}" if country else f"top importers of {product_or_hs}",
+        f"{product_or_hs} buyers wholesalers distributors{in_country}{exclude_us}",
     ]
 
     # 1. Tavily searches (parallel-ish via sequential awaits — small N)
@@ -721,6 +737,18 @@ async def discover_buyers_for_hs(
 
     # 2. LLM extraction
     candidates = await llm_extract_buyers(all_snippets, hs_code, product_name, country)
+
+    # Country post-filter: when the admin specified a country, drop rows whose
+    # extracted country is set and clearly doesn't match. Rows with no country
+    # set are kept (the LLM couldn't determine, but the snippet was country-scoped).
+    if country:
+        country_lc = country.lower().strip()
+        def _country_match(c: dict) -> bool:
+            row_country = (c.get("country") or "").lower().strip()
+            if not row_country:
+                return True
+            return country_lc in row_country or row_country in country_lc
+        candidates = [c for c in candidates if _country_match(c)]
 
     # Dedup within this batch on (company_name lowercased, country)
     deduped = {}
@@ -1050,7 +1078,9 @@ async def create_opportunity(data: OpportunityCreate, user: dict = Depends(requi
         "status": "Active",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": user["id"],
-        "matched_exporters": []
+        "matched_exporters": [],
+        "buyer_id": data.buyer_id,
+        "buyer_company": data.buyer_company,
     }
     await db.opportunities.insert_one(opp_doc)
     
